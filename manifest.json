@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Flowdeck",
+  "version": "1.0.0",
+  "description": "A grade calculator extension for course management",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/flowdeck.png",
+      "48": "icons/flowdeck.png",
+      "128": "icons/flowdeck.png"
+    }
+  },
+  "icons": {
+    "16": "icons/flowdeck.png",
+    "48": "icons/flowdeck.png",
+    "128": "icons/flowdeck.png"
+  },
+  "permissions": [
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://learn.bcit.ca/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://learn.bcit.ca/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

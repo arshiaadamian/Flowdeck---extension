@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flowdeck</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <!-- Header Section -->
+  <header class="header">
+    <img src="icons/flowdeck.png" alt="Flowdeck Logo" class="logo">
+    <h1 class="app-name">Flowdeck</h1>
+  </header>
+
+  <!-- Course Section -->
+  <section class="course-section">
+    <div class="course-info">
+      <p class="detected-course">Detected Course: <span id="detectedCourse">COMP XXXX</span></p>
+      <button id="changeCourseBtn" class="btn btn-secondary">Change Course</button>
+    </div>
+  </section>
+
+  <!-- Grade Weights Section -->
+  <section class="weights-section">
+    <button class="section-title-toggle" id="weightsToggle" aria-expanded="false" aria-controls="weightsContent">
+      <span class="chevron">▶</span>
+      <h2 class="section-title">Grade Weights</h2>
+    </button>
+    <div class="weights-content collapsed" id="weightsContent">
+      <div class="table-container">
+        <table class="weights-table">
+          <thead>
+            <tr>
+              <th>Category Name</th>
+              <th>Weight (%)</th>
+            </tr>
+          </thead>
+          <tbody id="weightsTableBody">
+            <tr>
+              <td>Assignments</td>
+              <td>30</td>
+            </tr>
+            <tr>
+              <td>Midterm</td>
+              <td>25</td>
+            </tr>
+            <tr>
+              <td>Final Exam</td>
+              <td>45</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="button-group">
+        <button id="addCategoryBtn" class="btn btn-primary">Add Category</button>
+        <button id="saveWeightsBtn" class="btn btn-primary">Save Weights</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Grades Section -->
+  <section class="grades-section">
+    <div class="grades-header">
+      <h2 class="section-title">Grades</h2>
+      <button id="refreshGradesBtn" class="btn btn-small">Refresh from Learning Hub</button>
+    </div>
+    <div class="auto-fetch-warning" id="autoFetchWarning" style="display: none;">
+      <span class="warning-icon">⚠</span>
+      <span>Auto-fetch may be inaccurate. You can override grades manually.</span>
+    </div>
+    <div class="fetch-status" id="fetchStatus" style="display: none;"></div>
+    <div class="grades-container" id="gradesContainer">
+      <div class="grade-input-group">
+        <div class="grade-label-group">
+          <label for="assignmentsGrade">Assignments:</label>
+          <div class="grade-info" id="assignmentsInfo" style="display: none;"></div>
+        </div>
+        <input type="text" id="assignmentsGrade" class="grade-input" placeholder="Enter grade">
+      </div>
+      <div class="grade-input-group">
+        <div class="grade-label-group">
+          <label for="midtermGrade">Midterm:</label>
+          <div class="grade-info" id="midtermInfo" style="display: none;"></div>
+        </div>
+        <input type="text" id="midtermGrade" class="grade-input" placeholder="Enter grade">
+      </div>
+      <div class="grade-input-group">
+        <div class="grade-label-group">
+          <label for="finalGrade">Final Exam:</label>
+          <div class="grade-info" id="finalInfo" style="display: none;"></div>
+        </div>
+        <input type="text" id="finalGrade" class="grade-input" placeholder="Enter grade">
+      </div>
+    </div>
+  </section>
+
+  <!-- Results Section -->
+  <section class="results-section">
+    <h2 class="section-title">Results</h2>
+    <div class="results-container">
+      <div class="result-item">
+        <span class="result-label">Current Grade:</span>
+        <span class="result-value">--%</span>
+      </div>
+      <div class="result-item">
+        <label for="targetGrade" class="result-label">Target Grade:</label>
+        <input type="text" id="targetGrade" class="target-input" placeholder="Enter target %">
+      </div>
+      <div class="result-item">
+        <span class="result-label">Required Grade on Remaining Work:</span>
+        <span class="result-value">--%</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer Section -->
+  <footer class="footer">
+    <button id="editWeightsBtn" class="btn btn-secondary">Edit Weights</button>
+    <button id="resetCourseBtn" class="btn btn-secondary">Reset Course</button>
+  </footer>
+
+  <script src="calc.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>
