@@ -127,16 +127,31 @@ function getDefaultCategoryWeights() {
   const weights = {};
   const rows = document.querySelectorAll('#weightsTableBody tr');
   
+  console.log('[Flowdeck] Reading category weights from table, found', rows.length, 'rows');
+  
   rows.forEach(row => {
-    const cells = row.querySelectorAll('td');
-    if (cells.length >= 2) {
-      const name = cells[0].textContent.trim();
-      const weight = parseFloat(cells[1].textContent.trim());
-      if (name && !isNaN(weight)) {
+    const nameInput = row.querySelector('.category-name-input');
+    const weightInput = row.querySelector('.weight-input');
+    
+    if (nameInput && weightInput) {
+      const name = (nameInput.value || '').trim();
+      const weightValue = weightInput.value.trim();
+      
+      if (name) {
+        // Parse weight, use null if empty or invalid
+        let weight = null;
+        if (weightValue) {
+          const parsed = parseFloat(weightValue);
+          if (!isNaN(parsed)) {
+            weight = parsed;
+          }
+        }
         weights[name] = weight;
+        console.log('[Flowdeck] Found category:', name, 'weight:', weight);
       }
     }
   });
   
+  console.log('[Flowdeck] Final category weights:', weights);
   return weights;
 }

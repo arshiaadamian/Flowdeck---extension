@@ -34,20 +34,42 @@
             <tr>
               <th>Category Name</th>
               <th>Weight (%)</th>
+              <th>Actions</th>
             </tr>
           </thead>
           <tbody id="weightsTableBody">
             <tr>
-              <td>Assignments</td>
-              <td>30</td>
+              <td>
+                <input type="text" class="category-name-input" value="Assignments" placeholder="Category name">
+              </td>
+              <td>
+                <input type="number" class="weight-input" min="0" max="100" step="0.1" value="30" placeholder="0.0">
+              </td>
+              <td>
+                <button type="button" class="btn-remove" aria-label="Remove category">×</button>
+              </td>
             </tr>
             <tr>
-              <td>Midterm</td>
-              <td>25</td>
+              <td>
+                <input type="text" class="category-name-input" value="Midterm" placeholder="Category name">
+              </td>
+              <td>
+                <input type="number" class="weight-input" min="0" max="100" step="0.1" value="25" placeholder="0.0">
+              </td>
+              <td>
+                <button type="button" class="btn-remove" aria-label="Remove category">×</button>
+              </td>
             </tr>
             <tr>
-              <td>Final Exam</td>
-              <td>45</td>
+              <td>
+                <input type="text" class="category-name-input" value="Final Exam" placeholder="Category name">
+              </td>
+              <td>
+                <input type="number" class="weight-input" min="0" max="100" step="0.1" value="45" placeholder="0.0">
+              </td>
+              <td>
+                <button type="button" class="btn-remove" aria-label="Remove category">×</button>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -56,6 +78,7 @@
         <button id="addCategoryBtn" class="btn btn-primary">Add Category</button>
         <button id="saveWeightsBtn" class="btn btn-primary">Save Weights</button>
       </div>
+      <div class="save-status" id="saveStatus" style="display: none;"></div>
     </div>
   </section>
 

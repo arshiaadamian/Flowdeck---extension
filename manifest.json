@@ -17,7 +17,8 @@
     "128": "icons/flowdeck.png"
   },
   "permissions": [
-    "activeTab"
+    "activeTab",
+    "storage"
   ],
   "host_permissions": [
     "https://learn.bcit.ca/*"
