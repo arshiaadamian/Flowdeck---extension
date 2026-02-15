@@ -1,157 +1,117 @@
-// Flowdeck Calculation Utilities
+/**
+ * Flowdeck Calculation Module
+ * Robust grade aggregation: Item -> Category -> Course
+ * Accepts Course/Category/Item instances or POJOs (converted via fromJson).
+ */
+
+import { Course, Category, Item } from './models.js';
 
 /**
- * Calculates contribution earned so far for each category
- * @param {Array} gradeItems - Array of grade items from scraping
- * @param {Object} categoryWeights - Object mapping category names to weights (percentages)
- * @returns {Object} Category data with contributions and averages
+ * Ensures we have a model instance from either an instance or POJO.
+ * @param {Category|Item|Object} obj
+ * @param {Function} Ctor - Category or Item constructor
+ * @returns {Category|Item}
  */
-function calculateCategoryContributions(gradeItems, categoryWeights) {
-  console.log('[Flowdeck] Calculating category contributions...');
-  console.log('[Flowdeck] Grade items:', gradeItems.length);
-  console.log('[Flowdeck] Category weights:', categoryWeights);
-  
-  // Group grade items by category
-  const categoryData = {};
-  
-  // Initialize category data
-  for (const categoryName in categoryWeights) {
-    categoryData[categoryName] = {
-      name: categoryName,
-      weight: categoryWeights[categoryName],
-      items: [],
-      totalPointsEarned: 0,
-      totalPointsPossible: 0,
-      averagePercent: null,
-      contributionPercent: null,
-      gradedWeightFraction: 1.0, // Assume all graded if unknown
-      isEstimated: false
-    };
-  }
-  
-  // Assign grade items to categories
-  for (const item of gradeItems) {
-    let assignedCategory = null;
-    
-    // Try to match by categoryGuess
-    if (item.categoryGuess) {
-      for (const categoryName in categoryWeights) {
-        if (categoryName.toLowerCase().includes(item.categoryGuess.toLowerCase()) ||
-            item.categoryGuess.toLowerCase().includes(categoryName.toLowerCase())) {
-          assignedCategory = categoryName;
-          break;
-        }
-      }
-    }
-    
-    // If no match, try to match by title keywords
-    if (!assignedCategory && item.title) {
-      const titleLower = item.title.toLowerCase();
-      for (const categoryName in categoryWeights) {
-        const categoryLower = categoryName.toLowerCase();
-        if (titleLower.includes(categoryLower) || categoryLower.includes(titleLower.split(' ')[0])) {
-          assignedCategory = categoryName;
-          break;
-        }
-      }
-    }
-    
-    // If still no match, assign to first category or create "Other"
-    if (!assignedCategory) {
-      const firstCategory = Object.keys(categoryWeights)[0];
-      assignedCategory = firstCategory;
-      console.log('[Flowdeck] Could not match item to category, assigning to:', assignedCategory);
-    }
-    
-    if (categoryData[assignedCategory]) {
-      categoryData[assignedCategory].items.push(item);
-      
-      // Accumulate points
-      if (item.pointsEarned !== null && item.pointsPossible !== null) {
-        categoryData[assignedCategory].totalPointsEarned += item.pointsEarned;
-        categoryData[assignedCategory].totalPointsPossible += item.pointsPossible;
-      }
-    }
-  }
-  
-  // Calculate averages and contributions for each category
-  for (const categoryName in categoryData) {
-    const category = categoryData[categoryName];
-    
-    if (category.items.length === 0) {
-      category.averagePercent = null;
-      category.contributionPercent = 0;
-      continue;
-    }
-    
-    // Calculate average percent for this category
-    if (category.totalPointsPossible > 0) {
-      // Use points-based calculation
-      category.averagePercent = (category.totalPointsEarned / category.totalPointsPossible) * 100;
-    } else {
-      // Use percent-based calculation (average of all item percents)
-      const validPercents = category.items
-        .map(item => item.scorePercent)
-        .filter(p => p !== null && !isNaN(p));
-      
-      if (validPercents.length > 0) {
-        category.averagePercent = validPercents.reduce((a, b) => a + b, 0) / validPercents.length;
-      }
-    }
-    
-    // Calculate contribution to final grade
-    // Contribution = (categoryAverage / 100) * (weightPercent * gradedWeightFraction)
-    if (category.averagePercent !== null && !isNaN(category.averagePercent)) {
-      // For now, assume gradedWeightFraction = 1.0 (all items graded)
-      // In the future, this could be calculated based on known vs unknown items
-      category.gradedWeightFraction = 1.0;
-      category.isEstimated = true; // Mark as estimated since we don't know total items
-      
-      category.contributionPercent = (category.averagePercent / 100) * 
-                                     (category.weight * category.gradedWeightFraction);
-    } else {
-      category.contributionPercent = 0;
-    }
-    
-    console.log(`[Flowdeck] Category ${categoryName}: avg=${category.averagePercent?.toFixed(1)}%, contribution=${category.contributionPercent?.toFixed(2)}%`);
-  }
-  
-  return categoryData;
+function toInstance(obj, Ctor) {
+  if (obj instanceof Ctor) return obj;
+  return Ctor.fromJson(obj);
 }
 
 /**
- * Gets default category weights from the weights table
- * @returns {Object} Category name to weight mapping
+ * Computes the category grade from done items.
+ * - Only items with item.done === true are included
+ * - categoryAvg = average(item.grade) of done items
+ * - Result stored in category.grade
+ *
+ * @param {Category|Object} category - Category instance or POJO
+ * @returns {{ grade: number, doneCount: number, totalItems: number }}
  */
-function getDefaultCategoryWeights() {
-  const weights = {};
-  const rows = document.querySelectorAll('#weightsTableBody tr');
-  
-  console.log('[Flowdeck] Reading category weights from table, found', rows.length, 'rows');
-  
-  rows.forEach(row => {
-    const nameInput = row.querySelector('.category-name-input');
-    const weightInput = row.querySelector('.weight-input');
-    
-    if (nameInput && weightInput) {
-      const name = (nameInput.value || '').trim();
-      const weightValue = weightInput.value.trim();
-      
-      if (name) {
-        // Parse weight, use null if empty or invalid
-        let weight = null;
-        if (weightValue) {
-          const parsed = parseFloat(weightValue);
-          if (!isNaN(parsed)) {
-            weight = parsed;
-          }
-        }
-        weights[name] = weight;
-        console.log('[Flowdeck] Found category:', name, 'weight:', weight);
-      }
-    }
+export function computeCategoryGradePercent(category) {
+  const cat = toInstance(category, Category);
+  const doneItems = cat.items.filter((it) => {
+    const item = toInstance(it, Item);
+    return item.done === true;
   });
-  
-  console.log('[Flowdeck] Final category weights:', weights);
-  return weights;
+
+  if (doneItems.length === 0) {
+    cat.grade = 0;
+    console.log('[Flowdeck] calc: category', cat.category || 'unnamed', 'no done items, grade=0');
+    return { grade: 0, doneCount: 0, totalItems: cat.items.length };
+  }
+
+  const sum = doneItems.reduce((acc, it) => {
+    const item = toInstance(it, Item);
+    return acc + (Number.isFinite(item.grade) ? item.grade : 0);
+  }, 0);
+  const grade = sum / doneItems.length;
+  cat.grade = grade;
+
+  console.log('[Flowdeck] calc: category', cat.category || 'unnamed', 'grade=', grade.toFixed(2), 'done=', doneItems.length);
+  return { grade, doneCount: doneItems.length, totalItems: cat.items.length };
+}
+
+/**
+ * Computes the current course grade from categories.
+ * - contribution = (category.grade / 100) * category.weight
+ * - current_grade = sum(contributions)
+ * - Does NOT normalize when weights don't sum to 100
+ * - Returns metadata about total weight and warnings
+ *
+ * @param {Course|Object} course - Course instance or POJO
+ * @returns {{
+ *   current_grade: number,
+ *   total_weight_entered: number,
+ *   categories_used: number,
+ *   estimated: boolean,
+ *   warnings: string[]
+ * }}
+ */
+export function computeCourseCurrentGrade(course) {
+  const c = toInstance(course, Course);
+  const warnings = [];
+
+  // First compute each category's grade
+  for (const cat of c.categories) {
+    const catInst = toInstance(cat, Category);
+    computeCategoryGradePercent(catInst);
+  }
+
+  let totalContrib = 0;
+  let totalWeightEntered = 0;
+  let categoriesUsed = 0;
+
+  for (const cat of c.categories) {
+    const catInst = toInstance(cat, Category);
+    const weight = Number.isFinite(catInst.weight) ? catInst.weight : 0;
+    const catGrade = Number.isFinite(catInst.grade) ? catInst.grade : 0;
+
+    if (weight <= 0) continue;
+
+    totalWeightEntered += weight;
+    const contribution = (catGrade / 100) * weight;
+    totalContrib += contribution;
+    categoriesUsed++;
+  }
+
+  const estimated = totalWeightEntered !== 100;
+  if (totalWeightEntered < 100 && totalWeightEntered > 0) {
+    warnings.push(`Weights sum to ${totalWeightEntered.toFixed(1)}%, not 100%. Grade is partial.`);
+  }
+  if (totalWeightEntered > 100) {
+    warnings.push(`Weights sum to ${totalWeightEntered.toFixed(1)}%, exceeding 100%.`);
+  }
+  if (totalWeightEntered === 0) {
+    warnings.push('No category weights entered.');
+  }
+
+  const result = {
+    current_grade: totalContrib,
+    total_weight_entered: totalWeightEntered,
+    categories_used: categoriesUsed,
+    estimated,
+    warnings,
+  };
+
+  console.log('[Flowdeck] calc: computeCourseCurrentGrade', result);
+  return result;
 }

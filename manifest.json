@@ -16,20 +16,19 @@
     "48": "icons/flowdeck.png",
     "128": "icons/flowdeck.png"
   },
-  "permissions": [
-    "activeTab",
-    "storage"
-  ],
-  "host_permissions": [
-    "https://learn.bcit.ca/*"
-  ],
+  "permissions": ["activeTab", "storage"],
+  "host_permissions": ["https://learn.bcit.ca/*"],
   "content_scripts": [
     {
-      "matches": [
-        "https://learn.bcit.ca/*"
-      ],
-      "js": ["content.js"],
+      "matches": ["https://learn.bcit.ca/*"],
+      "js": ["content_entry.js"],
       "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["models.js", "scrapedata.js"],
+      "matches": ["https://learn.bcit.ca/*"]
     }
   ]
 }

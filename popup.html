@@ -124,7 +124,7 @@
     <div class="results-container">
       <div class="result-item">
         <span class="result-label">Current Grade:</span>
-        <span class="result-value">--%</span>
+        <span id="currentGradeValue" class="result-value">--%</span>
       </div>
       <div class="result-item">
         <label for="targetGrade" class="result-label">Target Grade:</label>
@@ -132,7 +132,7 @@
       </div>
       <div class="result-item">
         <span class="result-label">Required Grade on Remaining Work:</span>
-        <span class="result-value">--%</span>
+        <span id="requiredGradeValue" class="result-value">--%</span>
       </div>
     </div>
   </section>
@@ -143,7 +143,6 @@
     <button id="resetCourseBtn" class="btn btn-secondary">Reset Course</button>
   </footer>
 
-  <script src="calc.js"></script>
-  <script src="popup.js"></script>
+  <script type="module" src="popup.js"></script>
 </body>
 </html>
