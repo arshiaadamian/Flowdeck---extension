@@ -1,5 +1,7 @@
 import { Course, Category, Item } from './models.js';
 
+
+const UNWEIGHTED_CATEGORY_IDENTIFIER = -100;
 /**
  * UTILITY FUNCTIONS
  * Parsing text, numbers, and cleaning string data.
@@ -117,7 +119,7 @@ const getColumnIndices = (table) => {
  */
 const getCategoriesAndItems = (doc, courseId) => {
 
-  const UNWEIGHTED_CATEGORY_IDENTIFIER = -100;
+ 
   const categories = [];
   
   // Find the main grades table. ID usually starts with 'z_' and has class 'd2l-table'
@@ -139,7 +141,6 @@ const getCategoriesAndItems = (doc, courseId) => {
 
   rows.forEach((row, index) => {
 
-    console.log(index+"- "+JSON.stringify(indices));
 
     // Every single grade item thats under a ctaegory has a td element with the class d_g_treeNodeImage
     const hasIndentationElement = row.querySelector('td.d_g_treeNodeImage');
@@ -160,7 +161,7 @@ const getCategoriesAndItems = (doc, courseId) => {
     if (isHeaderRow) return;
 
     // Get Cells
-    const cells = row.querySelectorAll('td, th');
+    const cells = row.querySelectorAll('td:not(.d_g_treeNodeImage), th');
     
     // Safety check for malformed rows
     if (cells.length < 3) return;
@@ -176,6 +177,7 @@ const getCategoriesAndItems = (doc, courseId) => {
     const rowPointsText = getText(indices.points);
     const rowWeightText = getText(indices.weight); 
     const rowGradeText = getText(indices.grade);
+
 
    
 
@@ -194,8 +196,11 @@ const getCategoriesAndItems = (doc, courseId) => {
     if(rowHasPoints){
       rowGrade = parsePointsToPercent(rowPointsText);
     }else if (rowHasWeight){
+
       // Move this to seperate function
       const parts = rowWeightText.split('/');
+         console.log("Grade: "+ rowGrade +" weight: "+ rowWeight)
+
       const part_achieved = parseFloat(parts[0]);
       const part_total = parseFloat(parts[1]); 
 
@@ -215,22 +220,18 @@ const getCategoriesAndItems = (doc, courseId) => {
       // Given the row, it will extract the points, weight, and grade of the item. Returning an Item object.
   // it will use the indices to get the points, weight, and grade from the row.
   const getGradeItemDetialsFromRow = (row) => {
+ 
     const itemName = cleanText(row.querySelector('th label, th div, th')?.innerText || "Unknown Item");
-    const pointsText = getText(indices.points);
     let done = false;
 
     // Handle Dropped
-    if (isDropped(row)) {
-      // User requirements: done=False if dropped? Or just grade=0?
-      // We will mark it as done=false so it doesn't negatively impact averages if we recalculate
-      done = false; 
+    if (isDropped(row) || (rowPointsText === '-' || !rowPointsText)) { 
+      done = false;
+    } else{
+      done = true;
     }
 
-    // Handle " - " or empty text (Not yet graded)
-    if (pointsText === '-' || !pointsText) {
-      done = false;
-  
-    }
+
 
 
     return new Item({
@@ -239,6 +240,8 @@ const getCategoriesAndItems = (doc, courseId) => {
       done: done,
       weight: rowWeight 
     });
+
+    
 
 
   }
@@ -292,30 +295,22 @@ const getCategoriesAndItems = (doc, courseId) => {
  * * @param {Category[]} categories 
  */
 const distributeMissingWeights = (categories) => {
+  const total_categories = categories.length;
+
   categories.forEach(cat => {
-    // Edge Case: If the category has a total weight (e.g. 20%) 
-    // but the calculated grade is 0 and items exist, we might want to 
-    // ensure the logic holds up. 
-    
-    // Specific Prompt Requirement: 
-    // "some pages dont have achieved weight so in this instances for items, 
-    // one needs to split the total category weight percent by the number of items"
-    
-    // Note: The Model `Item` stores `grade_percent` (User score), not `weight`.
-    // However, if we need to infer the Category Weight because it was missing:
-    
-    if (cat.weight === 0 && cat.items.length > 0) {
-      // Heuristic: Try to find a header text like "Labs (20%)" to extract weight
-      const match = cat.category.match(/\((\d+)%\)/);
-      if (match) {
-        cat.weight = parseFloat(match[1]);
-      }
+    if(cat.weight === UNWEIGHTED_CATEGORY_IDENTIFIER){
+      const totalItems = cat.items.length;
+      cat.weight = 100/ total_categories;
+       cat.items.forEach((item,index)=>{
+  
+         if(item.weight === UNWEIGHTED_CATEGORY_IDENTIFIER){
+          item.weight = 100/ totalItems;
+         }
+       })
+       
     }
-    
-    // If we have a category weight (e.g. 20), but no specific logic for items,
-    // The models are already set up correctly (Item grade is independent of weight).
-    // The prompt implies we might need to perform calculations here, 
-    // but since we are just scraping to Models, we return the object structure.
+
+
   });
 };
 
@@ -391,7 +386,9 @@ export function scrapeCourseAndGradesFromPage(dom = document) {
     const courseJson = course.toJson();
     console.log('[Flowdeck] Scrape success, course:', courseJson.course_name, 'categories:', courseJson.categories?.length);
 
-    console.log(courseJson);
+
+    console.log(courseJson)
+
     return courseJson;
   } catch (error) {
     console.error('[Flowdeck] Scrape failed:', error);

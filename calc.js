@@ -20,34 +20,48 @@ function toInstance(obj, Ctor) {
 /**
  * Computes the category grade from done items.
  * - Only items with item.done === true are included
- * - categoryAvg = average(item.grade) of done items
+ * - Uses weighted average if ALL done items have valid weight > 0
+ * - Falls back to simple average otherwise
  * - Result stored in category.grade
  *
  * @param {Category|Object} category - Category instance or POJO
- * @returns {{ grade: number, doneCount: number, totalItems: number }}
+ * @returns {{ grade: number, doneCount: number, totalItems: number, usedWeighted: boolean }}
  */
 export function computeCategoryGradePercent(category) {
   const cat = toInstance(category, Category);
-  const doneItems = cat.items.filter((it) => {
-    const item = toInstance(it, Item);
-    return item.done === true;
-  });
+
+  const doneItems = cat.items
+    .map((it) => toInstance(it, Item))
+    .filter((it) => it.done === true);
 
   if (doneItems.length === 0) {
     cat.grade = 0;
-    console.log('[Flowdeck] calc: category', cat.category || 'unnamed', 'no done items, grade=0');
-    return { grade: 0, doneCount: 0, totalItems: cat.items.length };
+    return { grade: 0, doneCount: 0, totalItems: cat.items.length, usedWeighted: false };
   }
 
-  const sum = doneItems.reduce((acc, it) => {
-    const item = toInstance(it, Item);
-    return acc + (Number.isFinite(item.grade) ? item.grade : 0);
-  }, 0);
-  const grade = sum / doneItems.length;
-  cat.grade = grade;
+  // Check if ALL done items have valid weights
+  const allHaveValidWeights = doneItems.every((it) => Number.isFinite(it.weight) && it.weight > 0);
 
-  console.log('[Flowdeck] calc: category', cat.category || 'unnamed', 'grade=', grade.toFixed(2), 'done=', doneItems.length);
-  return { grade, doneCount: doneItems.length, totalItems: cat.items.length };
+  let grade = 0;
+  let usedWeighted = false;
+
+  if (allHaveValidWeights) {
+    // Weighted average
+    const totalWeight = doneItems.reduce((acc, it) => acc + it.weight, 0);
+    const weightedSum = doneItems.reduce((acc, it) => acc + (it.grade * it.weight), 0);
+    grade = weightedSum / totalWeight;
+    usedWeighted = true;
+    console.log('[Flowdeck] Category weighted average:', cat.category, 'grade:', grade.toFixed(2));
+  } else {
+    // Simple average fallback
+    const sum = doneItems.reduce((acc, it) => acc + it.grade, 0);
+    grade = sum / doneItems.length;
+    usedWeighted = false;
+    console.log('[Flowdeck] Category simple average:', cat.category, 'grade:', grade.toFixed(2));
+  }
+
+  cat.grade = grade;
+  return { grade, doneCount: doneItems.length, totalItems: cat.items.length, usedWeighted };
 }
 
 /**

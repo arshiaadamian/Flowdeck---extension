@@ -14,7 +14,7 @@ body {
 
 /* Header Section */
 .header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #004489 0%, #003366 100%);
   color: white;
   padding: 20px;
   display: flex;
@@ -80,14 +80,14 @@ body {
 }
 
 .section-title-toggle:focus {
-  outline: 2px solid #667eea;
+  outline: 2px solid #004489;
   outline-offset: 2px;
   border-radius: 4px;
 }
 
 .chevron {
   font-size: 12px;
-  color: #667eea;
+  color: #004489;
   transition: transform 0.2s;
   display: inline-block;
   width: 16px;
@@ -161,7 +161,7 @@ body {
 
 .category-name-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #004489;
 }
 
 .weight-input {
@@ -176,35 +176,153 @@ body {
 
 .weight-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #004489;
 }
 
-.btn-remove {
-  background: none;
-  border: none;
-  color: #dc3545;
-  font-size: 20px;
-  font-weight: bold;
-  cursor: pointer;
-  padding: 0;
-  width: 24px;
-  height: 24px;
+/* Categories container: expandable category blocks */
+.categories-container {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.category-block {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.category-block-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  border-radius: 4px;
-  transition: all 0.2s;
-  line-height: 1;
+  gap: 8px;
+  padding: 10px 12px;
+  background: #f8f9fa;
+  cursor: pointer;
+  border: none;
+  width: 100%;
+  text-align: left;
+  font-size: 14px;
 }
 
-.btn-remove:hover {
-  background-color: #f8d7da;
-  color: #721c24;
+.category-block-header:hover {
+  background: #eef0f2;
 }
 
-.btn-remove:focus {
-  outline: 2px solid #dc3545;
+.category-block-header:focus {
+  outline: 2px solid #004489;
   outline-offset: 2px;
+}
+
+.category-block-header .category-chevron {
+  font-size: 12px;
+  color: #004489;
+  transition: transform 0.2s;
+  display: inline-block;
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.category-block-header[aria-expanded="true"] .category-chevron {
+  transform: rotate(90deg);
+}
+
+.category-block-name {
+  flex: 1;
+  font-weight: 600;
+  color: #333;
+  min-width: 0;
+}
+
+.category-block-weight-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.category-block-weight-wrap label {
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+}
+
+.category-block-weight-wrap .weight-input {
+  width: 70px;
+}
+
+/* Category grade display (read-only placeholder) */
+.category-grade-display {
+  font-size: 12px;
+  color: #666;
+  background-color: #f0f2f5;
+  padding: 6px 8px;
+  border-radius: 4px;
+  min-width: 80px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.category-items-body {
+  overflow: hidden;
+  transition: max-height 0.25s ease-out;
+  max-height: 800px;
+}
+
+.category-items-body.collapsed {
+  max-height: 0;
+  overflow: hidden;
+}
+
+.category-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.category-items-table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: #555;
+  background: #f0f2f5;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.category-items-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #eee;
+  color: #666;
+}
+
+.category-items-table tr:last-child td {
+  border-bottom: none;
+}
+
+.category-items-table .item-name {
+  font-weight: 500;
+  color: #333;
+}
+
+.category-items-table .weight-input,
+.category-items-table .grade-input {
+  width: 70px;
+  padding: 6px 8px;
+  font-size: 13px;
+}
+
+.category-items-table .weight-input:focus,
+.category-items-table .grade-input:focus {
+  outline: none;
+  border-color: #004489;
+}
+
+.grades-hint {
+  font-size: 12px;
+  color: #666;
+  margin-top: 8px;
 }
 
 .save-status {
@@ -244,132 +362,6 @@ body {
   margin-top: 15px;
 }
 
-/* Grades Section */
-.grades-section {
-  padding: 20px;
-  background-color: white;
-  border-bottom: 1px solid #e0e0e0;
-}
-
-.grades-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-}
-
-.grades-header .section-title {
-  margin-bottom: 0;
-}
-
-.btn-small {
-  padding: 6px 12px;
-  font-size: 12px;
-}
-
-.auto-fetch-warning {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  background-color: #fff3cd;
-  border: 1px solid #ffc107;
-  border-radius: 4px;
-  margin-bottom: 12px;
-  font-size: 12px;
-  color: #856404;
-}
-
-.warning-icon {
-  font-size: 14px;
-}
-
-.fetch-status {
-  padding: 8px 12px;
-  border-radius: 4px;
-  margin-bottom: 12px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.fetch-status.fetching {
-  background-color: #e7f3ff;
-  color: #0066cc;
-  border: 1px solid #b3d9ff;
-}
-
-.fetch-status.success {
-  background-color: #d4edda;
-  color: #155724;
-  border: 1px solid #c3e6cb;
-}
-
-.fetch-status.error {
-  background-color: #f8d7da;
-  color: #721c24;
-  border: 1px solid #f5c6cb;
-}
-
-.grades-container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.grade-input-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.grade-label-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  flex: 1;
-}
-
-.grade-input-group label {
-  font-size: 14px;
-  color: #666;
-  font-weight: 500;
-}
-
-.grade-info {
-  font-size: 11px;
-  color: #667eea;
-  font-style: italic;
-  margin-top: 2px;
-}
-
-.grade-input-group {
-  display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-}
-
-.grade-input {
-  flex: 0 0 auto;
-  max-width: 150px;
-}
-
-.grade-input {
-  flex: 1;
-  max-width: 150px;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  transition: border-color 0.2s;
-}
-
-.grade-input:focus {
-  outline: none;
-  border-color: #667eea;
-}
-
 /* Results Section */
 .results-section {
   padding: 20px;
@@ -401,7 +393,7 @@ body {
 .result-value {
   font-size: 16px;
   font-weight: 600;
-  color: #667eea;
+  color: #004489;
 }
 
 .target-input {
@@ -415,7 +407,7 @@ body {
 
 .target-input:focus {
   outline: none;
-  border-color: #667eea;
+  border-color: #004489;
 }
 
 /* Footer Section */
@@ -439,14 +431,14 @@ body {
 }
 
 .btn-primary {
-  background-color: #667eea;
+  background-color: #004489;
   color: white;
 }
 
 .btn-primary:hover {
-  background-color: #5568d3;
+  background-color: #003366;
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 2px 4px rgba(0, 68, 137, 0.3);
 }
 
 .btn-secondary {

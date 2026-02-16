@@ -1,9 +1,10 @@
 /**
  * Flowdeck Popup - Thin UI Controller
- * Orchestrates UI, calls storage/calc/messaging. No scraping or grade math.
+ * Uses course categories and items from scrape/models. Expandable UI per category
+ * to edit category weight and per-item weights/grades. No add/delete category.
  */
 
-import { Course } from './models.js';
+import { Course, Category, Item } from './models.js';
 import { computeCourseCurrentGrade } from './calc.js';
 import { loadCourse, saveCourse } from './storage.js';
 
@@ -13,7 +14,6 @@ document.addEventListener('DOMContentLoaded', function () {
   const weightsToggle = document.getElementById('weightsToggle');
   const weightsContent = document.getElementById('weightsContent');
   const changeCourseBtn = document.getElementById('changeCourseBtn');
-  const addCategoryBtn = document.getElementById('addCategoryBtn');
   const saveWeightsBtn = document.getElementById('saveWeightsBtn');
   const editWeightsBtn = document.getElementById('editWeightsBtn');
   const resetCourseBtn = document.getElementById('resetCourseBtn');
@@ -22,12 +22,14 @@ document.addEventListener('DOMContentLoaded', function () {
   const autoFetchWarning = document.getElementById('autoFetchWarning');
   const detectedCourseEl = document.getElementById('detectedCourse');
   const saveStatus = document.getElementById('saveStatus');
-  const weightsTableBody = document.getElementById('weightsTableBody');
+  const categoriesContainer = document.getElementById('categoriesContainer');
   const currentGradeValue = document.getElementById('currentGradeValue');
   const requiredGradeValue = document.getElementById('requiredGradeValue');
   const targetGradeInput = document.getElementById('targetGrade');
 
   let currentCourseKey = null;
+  /** @type {Course|null} */
+  let currentCourse = null;
 
   // --- UI Helpers ---
 
@@ -48,79 +50,212 @@ document.addEventListener('DOMContentLoaded', function () {
     fetchStatus.className = `fetch-status ${className || ''}`;
   }
 
-  // --- Weights Table ---
-
-  function getDefaultWeights() {
-    return [
-      { name: 'Assignments', weight: 30 },
-      { name: 'Midterm', weight: 25 },
-      { name: 'Final Exam', weight: 45 },
-    ];
+  // --- Compute category grade average from items ---
+  
+  function computeCategoryGrade(category) {
+    if (!category || !category.items || category.items.length === 0) {
+      return null;
+    }
+    
+    const itemsWithGrades = category.items.filter(item => Number.isFinite(item.grade));
+    if (itemsWithGrades.length === 0) {
+      return null;
+    }
+    
+    const totalWeight = itemsWithGrades.reduce((sum, item) => {
+      const w = Number.isFinite(item.weight) ? item.weight : 0;
+      return sum + w;
+    }, 0);
+    
+    if (totalWeight === 0) {
+      // Simple average if no weights
+      const sum = itemsWithGrades.reduce((s, item) => s + item.grade, 0);
+      return sum / itemsWithGrades.length;
+    }
+    
+    // Weighted average
+    const weightedSum = itemsWithGrades.reduce((sum, item) => {
+      const w = Number.isFinite(item.weight) ? item.weight : 0;
+      return sum + (item.grade * w);
+    }, 0);
+    
+    return weightedSum / totalWeight;
   }
 
-  function renderWeightsTable(rows) {
-    if (!weightsTableBody) return;
-    weightsTableBody.innerHTML = '';
-    (rows || []).forEach((row, index) => {
-      const tr = document.createElement('tr');
-      const nameInput = document.createElement('input');
-      nameInput.type = 'text';
-      nameInput.className = 'category-name-input';
-      nameInput.value = row.name || '';
-      nameInput.placeholder = 'Category name';
+  // --- Render categories and items (from course data) ---
+
+  /**
+   * @param {Course} course
+   */
+  function renderCategoriesAndItems(course) {
+    if (!categoriesContainer) return;
+    categoriesContainer.innerHTML = '';
+
+    if (!course || !course.categories || course.categories.length === 0) {
+      const empty = document.createElement('p');
+      empty.className = 'grades-hint';
+      empty.textContent = 'No categories yet. Use "Refresh from Learning Hub" on a grades page to load course data.';
+      categoriesContainer.appendChild(empty);
+      return;
+    }
+
+    course.categories.forEach((cat) => {
+      const block = document.createElement('div');
+      block.className = 'category-block';
+      block.dataset.categoryId = cat.id;
+
+      const header = document.createElement('button');
+      header.type = 'button';
+      header.className = 'category-block-header';
+      header.setAttribute('aria-expanded', 'false');
+      header.setAttribute('aria-controls', `items-${cat.id}`);
+
+      const chevron = document.createElement('span');
+      chevron.className = 'category-chevron';
+      chevron.textContent = '▶';
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'category-block-name';
+      nameSpan.textContent = cat.category || 'Unnamed';
+
+      const weightWrap = document.createElement('div');
+      weightWrap.className = 'category-block-weight-wrap';
+      const weightLabel = document.createElement('label');
+      weightLabel.textContent = 'Weight (%)';
       const weightInput = document.createElement('input');
       weightInput.type = 'number';
       weightInput.className = 'weight-input';
       weightInput.min = '0';
       weightInput.max = '100';
       weightInput.step = '0.1';
-      weightInput.value = row.weight != null ? row.weight : '';
-      weightInput.placeholder = '0.0';
-      const removeBtn = document.createElement('button');
-      removeBtn.type = 'button';
-      removeBtn.className = 'btn-remove';
-      removeBtn.setAttribute('aria-label', 'Remove category');
-      removeBtn.textContent = '×';
-      removeBtn.addEventListener('click', () => tr.remove());
-      tr.appendChild(document.createElement('td')).appendChild(nameInput);
-      tr.appendChild(document.createElement('td')).appendChild(weightInput);
-      tr.appendChild(document.createElement('td')).appendChild(removeBtn);
-      weightsTableBody.appendChild(tr);
+      weightInput.value = Number.isFinite(cat.weight) ? cat.weight : '';
+      weightInput.placeholder = '0';
+      weightInput.dataset.categoryId = cat.id;
+      
+      // Category grade display placeholder
+      const gradeDisplay = document.createElement('span');
+      gradeDisplay.className = 'category-grade-display';
+      const catGrade = computeCategoryGrade(cat);
+      gradeDisplay.textContent = catGrade !== null ? `Grade: ${catGrade.toFixed(1)}%` : 'Grade: --%';
+      
+      weightWrap.appendChild(weightLabel);
+      weightWrap.appendChild(weightInput);
+      weightWrap.appendChild(gradeDisplay);
+
+      header.appendChild(chevron);
+      header.appendChild(nameSpan);
+      header.appendChild(weightWrap);
+
+      const body = document.createElement('div');
+      body.id = `items-${cat.id}`;
+      body.className = 'category-items-body collapsed';
+
+      const table = document.createElement('table');
+      table.className = 'category-items-table';
+      table.innerHTML = '<thead><tr><th>Item</th><th>Weight (%)</th><th>Grade (%)</th></tr></thead><tbody></tbody>';
+      const tbody = table.querySelector('tbody');
+
+      (cat.items || []).forEach((item) => {
+        const tr = document.createElement('tr');
+        tr.dataset.itemId = item.id;
+        tr.innerHTML = `
+          <td class="item-name">${escapeHtml(item.name || '')}</td>
+          <td><input type="number" class="weight-input item-weight" min="0" max="100" step="0.1" value="${Number.isFinite(item.weight) ? item.weight : ''}" placeholder="0" data-item-id="${escapeHtml(item.id)}"></td>
+          <td><input type="number" class="grade-input item-grade" min="0" max="100" step="0.1" value="${Number.isFinite(item.grade) ? item.grade : ''}" placeholder="0-100" data-item-id="${escapeHtml(item.id)}"></td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      body.appendChild(table);
+      block.appendChild(header);
+      block.appendChild(body);
+      categoriesContainer.appendChild(block);
+
+      header.addEventListener('click', (e) => {
+        if (e.target.closest('.weight-input')) return;
+        const expanded = header.getAttribute('aria-expanded') === 'true';
+        header.setAttribute('aria-expanded', !expanded);
+        body.classList.toggle('collapsed', expanded);
+      });
     });
   }
 
-  function collectWeightsFromTable() {
-    if (!weightsTableBody) return [];
-    const rows = [];
-    weightsTableBody.querySelectorAll('tr').forEach((tr) => {
-      const nameInput = tr.querySelector('.category-name-input');
-      const weightInput = tr.querySelector('.weight-input');
-      if (!nameInput || !weightInput) return;
-      const name = (nameInput.value || '').trim();
-      if (!name) return;
-      const weightVal = weightInput.value.trim();
-      const weight = weightVal ? (isNaN(parseFloat(weightVal)) ? null : parseFloat(weightVal)) : null;
-      rows.push({ name, weight });
-    });
-    return rows;
+  function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str;
+    return div.innerHTML;
   }
-
-  function weightsTableToCategories(rows) {
-    return rows.map((r) => ({ category: r.name, weight_percent: r.weight ?? 0 }));
-  }
-
-  function categoriesToWeightsRows(categories) {
-    if (!Array.isArray(categories)) return getDefaultWeights();
-    return categories.map((c) => ({
-      name: c.category || c.name || '',
-      weight: c.weight ?? c.weight ?? null,
-    })).filter((r) => r.name);
-  }
-
-  // --- Course Merge ---
 
   /**
-   * Builds a Course from scrape response and merges saved weights.
+   * Collect category weights and item weights/grades from the DOM into the current course object.
+   * Does not add or remove categories/items; only updates existing.
+   * @param {Course} course
+   * @returns {Course}
+   */
+  function collectFromUIIntoCourse(course) {
+    if (!categoriesContainer || !course) return course;
+
+    const blocks = categoriesContainer.querySelectorAll('.category-block');
+    const catById = new Map(course.categories.map((c) => [c.id, c]));
+
+    blocks.forEach((block) => {
+      const catId = block.dataset.categoryId;
+      const cat = catById.get(catId);
+      if (!cat) return;
+
+      const weightInput = block.querySelector('.category-block-header .weight-input');
+      if (weightInput && weightInput.value.trim() !== '') {
+        const w = parseFloat(weightInput.value);
+        if (Number.isFinite(w)) cat.weight = w;
+      }
+
+      const itemById = new Map((cat.items || []).map((i) => [i.id, i]));
+      block.querySelectorAll('tr[data-item-id]').forEach((tr) => {
+        const itemId = tr.dataset.itemId;
+        const item = itemById.get(itemId);
+        if (!item) return;
+
+        const wInput = tr.querySelector('.item-weight');
+        const gInput = tr.querySelector('.item-grade');
+        if (wInput && wInput.value.trim() !== '') {
+          const w = parseFloat(wInput.value);
+          if (Number.isFinite(w)) item.weight = w;
+        }
+        if (gInput && gInput.value.trim() !== '') {
+          const g = parseFloat(gInput.value);
+          if (Number.isFinite(g)) item.grade = g;
+        }
+      });
+    });
+
+    return course;
+  }
+
+  // --- Update category grade displays in the UI ---
+  
+  function updateCategoryGradeDisplays(course) {
+    if (!categoriesContainer || !course) return;
+    
+    const blocks = categoriesContainer.querySelectorAll('.category-block');
+    const catById = new Map(course.categories.map((c) => [c.id, c]));
+    
+    blocks.forEach((block) => {
+      const catId = block.dataset.categoryId;
+      const cat = catById.get(catId);
+      if (!cat) return;
+      
+      const gradeDisplay = block.querySelector('.category-grade-display');
+      if (gradeDisplay) {
+        const catGrade = computeCategoryGrade(cat);
+        gradeDisplay.textContent = catGrade !== null ? `Grade: ${catGrade.toFixed(1)}%` : 'Grade: --%';
+      }
+    });
+  }
+
+  // --- Course merge (saved overrides into scraped) ---
+
+  /**
+   * Builds a Course from scrape response and merges saved overrides (weights, grades).
    */
   async function buildCourseFromResponse(courseJson) {
     const course = Course.fromJson(courseJson || {});
@@ -129,61 +264,35 @@ document.addEventListener('DOMContentLoaded', function () {
 
     const saved = await loadCourse(courseKey);
     if (saved && Array.isArray(saved.categories)) {
-      const weightMap = {};
-      saved.categories.forEach((c) => {
-        const name = (c.category || c.name || '').trim();
-        if (name && (c.weight != null || c.weight != null)) {
-          weightMap[name.toLowerCase()] = c.weight ?? c.weight;
-        }
-      });
+      const savedCatById = new Map(saved.categories.map((c) => [c.id, c]));
+      const savedCatByName = new Map(
+        saved.categories.map((c) => [(c.category || c.name || '').toLowerCase(), c])
+      );
+
       course.categories.forEach((cat) => {
-        const key = (cat.category || '').toLowerCase();
-        if (key && weightMap[key] != null) {
-          cat.weight = weightMap[key];
+        const savedCat = savedCatById.get(cat.id) || savedCatByName.get((cat.category || '').toLowerCase());
+        if (savedCat) {
+          if (Number.isFinite(savedCat.weight)) cat.weight = savedCat.weight;
+          if (Array.isArray(savedCat.items)) {
+            const savedItemById = new Map(savedCat.items.map((i) => [i.id, i]));
+            const savedItemByName = new Map(savedCat.items.map((i) => [(i.name || '').toLowerCase(), i]));
+            cat.items.forEach((item) => {
+              const si = savedItemById.get(item.id) || savedItemByName.get((item.name || '').toLowerCase());
+              if (si) {
+                if (Number.isFinite(si.weight)) item.weight = si.weight;
+                if (Number.isFinite(si.grade)) item.grade = si.grade;
+              }
+            });
+          }
         }
       });
     }
     return course;
   }
 
-  /**
-   * Syncs weights from table into course and returns updated course for calc.
-   */
-  function mergeWeightsFromTableIntoCourse(course) {
-    const rows = collectWeightsFromTable();
-    const byName = {};
-    course.categories.forEach((c) => {
-      byName[(c.category || '').toLowerCase()] = c;
-    });
-    rows.forEach((r) => {
-      const key = (r.name || '').toLowerCase();
-      if (!key) return;
-      if (byName[key]) {
-        byName[key].weight = r.weight ?? 0;
-      } else {
-        course.addCategory({ category: r.name, weight_percent: r.weight ?? 0 });
-      }
-    });
-    return course;
-  }
+  // --- UI update from course / calc ---
 
-  // --- UI Update from Course ---
-
-  function mapCategoryToInputIds(categoryName) {
-    const lower = (categoryName || '').toLowerCase();
-    if (lower.includes('assignment') || lower.includes('lab') || lower.includes('project')) {
-      return { inputId: 'assignmentsGrade', infoId: 'assignmentsInfo' };
-    }
-    if (lower.includes('midterm') || lower.includes('mid-term')) {
-      return { inputId: 'midtermGrade', infoId: 'midtermInfo' };
-    }
-    if (lower.includes('final') || lower.includes('exam')) {
-      return { inputId: 'finalGrade', infoId: 'finalInfo' };
-    }
-    return null;
-  }
-
-  function updateUIFromCourse(course, calcResult) {
+  function updateResultsFromCalc(calcResult) {
     if (calcResult && currentGradeValue) {
       const suffix = calcResult.estimated ? ' (est.)' : '';
       currentGradeValue.textContent = `${calcResult.current_grade.toFixed(1)}%${suffix}`;
@@ -191,26 +300,14 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('[Flowdeck] Calc warnings:', calcResult.warnings);
       }
     }
-
-    if (course) {
-      course.categories.forEach((cat) => {
-        const ids = mapCategoryToInputIds(cat.category);
-        if (!ids) return;
-        const input = document.getElementById(ids.inputId);
-        const info = document.getElementById(ids.infoId);
-        if (input && Number.isFinite(cat.grade)) {
-          input.value = cat.grade.toFixed(1);
-        }
-        if (info) {
-          info.style.display = 'block';
-          info.textContent = `Avg: ${(cat.grade || 0).toFixed(1)}%`;
-        }
-      });
-    }
-
-    // Required grade placeholder - could be extended later
     if (requiredGradeValue) {
       requiredGradeValue.textContent = '--%';
+    }
+  }
+
+  function updateTargetFromCourse(course) {
+    if (targetGradeInput && course && Number.isFinite(course.target_grade)) {
+      targetGradeInput.value = course.target_grade;
     }
   }
 
@@ -234,8 +331,13 @@ document.addEventListener('DOMContentLoaded', function () {
           if (response.courseKey) {
             currentCourseKey = response.courseKey;
             const saved = await loadCourse(currentCourseKey);
-            const rows = saved ? categoriesToWeightsRows(saved.categories) : getDefaultWeights();
-            renderWeightsTable(rows.length ? rows : getDefaultWeights());
+            if (saved) {
+              currentCourse = Course.fromJson(saved);
+              renderCategoriesAndItems(currentCourse);
+              const calcResult = computeCourseCurrentGrade(currentCourse);
+              updateResultsFromCalc(calcResult);
+              updateTargetFromCourse(currentCourse);
+            }
           }
         } else if (detectedCourseEl) {
           detectedCourseEl.textContent = 'Not found';
@@ -295,12 +397,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
           const course = await buildCourseFromResponse(response.course);
           currentCourseKey = course.id || currentCourseKey;
-          renderWeightsTable(categoriesToWeightsRows(course.categories));
+          currentCourse = course;
 
-          const merged = mergeWeightsFromTableIntoCourse(course);
-          const calcResult = computeCourseCurrentGrade(merged);
+          renderCategoriesAndItems(course);
 
-          updateUIFromCourse(merged, calcResult);
+          const calcResult = computeCourseCurrentGrade(course);
+          updateResultsFromCalc(calcResult);
+          updateTargetFromCourse(course);
 
           resolve();
         });
@@ -324,31 +427,20 @@ document.addEventListener('DOMContentLoaded', function () {
     changeCourseBtn.addEventListener('click', () => console.log('[Flowdeck] Change Course'));
   }
 
-  if (addCategoryBtn && weightsTableBody) {
-    addCategoryBtn.addEventListener('click', () => {
-      const rows = collectWeightsFromTable();
-      rows.push({ name: 'New Category', weight: null });
-      renderWeightsTable(rows);
-    });
-  }
-
   if (saveWeightsBtn) {
     saveWeightsBtn.addEventListener('click', async () => {
-      if (!currentCourseKey) {
-        showSaveStatus('Open a Learning Hub course page to save weights.', 'error');
+      if (!currentCourseKey || !currentCourse) {
+        showSaveStatus('Open a Learning Hub course page and refresh grades first.', 'error');
         return;
       }
-      const rows = collectWeightsFromTable();
-      if (rows.length === 0) {
-        showSaveStatus('Nothing to save', 'info');
-        return;
-      }
-      const courseJson = {
-        id: currentCourseKey,
-        categories: weightsTableToCategories(rows),
-      };
+      collectFromUIIntoCourse(currentCourse);
+      const courseJson = currentCourse.toJson();
       await saveCourse(currentCourseKey, courseJson);
       showSaveStatus('Saved', 'success');
+
+      const calcResult = computeCourseCurrentGrade(currentCourse);
+      updateResultsFromCalc(calcResult);
+      updateCategoryGradeDisplays(currentCourse);
     });
   }
 
@@ -360,11 +452,21 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   if (targetGradeInput) {
-    targetGradeInput.addEventListener('input', () => {});
+    targetGradeInput.addEventListener('input', () => {
+      if (currentCourse && targetGradeInput.value.trim() !== '') {
+        const v = parseFloat(targetGradeInput.value);
+        if (Number.isFinite(v)) currentCourse.target_grade = v;
+      }
+    });
   }
 
   // --- Init ---
-  renderWeightsTable(getDefaultWeights());
+  if (categoriesContainer && !currentCourse) {
+    const empty = document.createElement('p');
+    empty.className = 'grades-hint';
+    empty.textContent = 'No categories yet. Use "Refresh from Learning Hub" on a grades page to load course data.';
+    categoriesContainer.appendChild(empty);
+  }
   fetchCourseFromActiveTab();
   fetchGradesFromLearningHub().catch(() => {});
 });

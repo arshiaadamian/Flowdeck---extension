@@ -17,104 +17,23 @@
   <section class="course-section">
     <div class="course-info">
       <p class="detected-course">Detected Course: <span id="detectedCourse">COMP XXXX</span></p>
-      <button id="changeCourseBtn" class="btn btn-secondary">Change Course</button>
     </div>
   </section>
 
-  <!-- Grade Weights Section -->
+  <!-- Grade Weights Section (Categories & Items) -->
   <section class="weights-section">
-    <button class="section-title-toggle" id="weightsToggle" aria-expanded="false" aria-controls="weightsContent">
+    <button class="section-title-toggle" id="weightsToggle" aria-expanded="true" aria-controls="weightsContent">
       <span class="chevron">▶</span>
       <h2 class="section-title">Grade Weights</h2>
     </button>
-    <div class="weights-content collapsed" id="weightsContent">
-      <div class="table-container">
-        <table class="weights-table">
-          <thead>
-            <tr>
-              <th>Category Name</th>
-              <th>Weight (%)</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="weightsTableBody">
-            <tr>
-              <td>
-                <input type="text" class="category-name-input" value="Assignments" placeholder="Category name">
-              </td>
-              <td>
-                <input type="number" class="weight-input" min="0" max="100" step="0.1" value="30" placeholder="0.0">
-              </td>
-              <td>
-                <button type="button" class="btn-remove" aria-label="Remove category">×</button>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <input type="text" class="category-name-input" value="Midterm" placeholder="Category name">
-              </td>
-              <td>
-                <input type="number" class="weight-input" min="0" max="100" step="0.1" value="25" placeholder="0.0">
-              </td>
-              <td>
-                <button type="button" class="btn-remove" aria-label="Remove category">×</button>
-              </td>
-            </tr>
-            <tr>
-              <td>
-                <input type="text" class="category-name-input" value="Final Exam" placeholder="Category name">
-              </td>
-              <td>
-                <input type="number" class="weight-input" min="0" max="100" step="0.1" value="45" placeholder="0.0">
-              </td>
-              <td>
-                <button type="button" class="btn-remove" aria-label="Remove category">×</button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+    <div class="weights-content" id="weightsContent">
+      <div id="categoriesContainer" class="categories-container">
+        <!-- Categories and expandable items rendered by popup.js from course data -->
       </div>
       <div class="button-group">
-        <button id="addCategoryBtn" class="btn btn-primary">Add Category</button>
         <button id="saveWeightsBtn" class="btn btn-primary">Save Weights</button>
       </div>
       <div class="save-status" id="saveStatus" style="display: none;"></div>
-    </div>
-  </section>
-
-  <!-- Grades Section -->
-  <section class="grades-section">
-    <div class="grades-header">
-      <h2 class="section-title">Grades</h2>
-      <button id="refreshGradesBtn" class="btn btn-small">Refresh from Learning Hub</button>
-    </div>
-    <div class="auto-fetch-warning" id="autoFetchWarning" style="display: none;">
-      <span class="warning-icon">⚠</span>
-      <span>Auto-fetch may be inaccurate. You can override grades manually.</span>
-    </div>
-    <div class="fetch-status" id="fetchStatus" style="display: none;"></div>
-    <div class="grades-container" id="gradesContainer">
-      <div class="grade-input-group">
-        <div class="grade-label-group">
-          <label for="assignmentsGrade">Assignments:</label>
-          <div class="grade-info" id="assignmentsInfo" style="display: none;"></div>
-        </div>
-        <input type="text" id="assignmentsGrade" class="grade-input" placeholder="Enter grade">
-      </div>
-      <div class="grade-input-group">
-        <div class="grade-label-group">
-          <label for="midtermGrade">Midterm:</label>
-          <div class="grade-info" id="midtermInfo" style="display: none;"></div>
-        </div>
-        <input type="text" id="midtermGrade" class="grade-input" placeholder="Enter grade">
-      </div>
-      <div class="grade-input-group">
-        <div class="grade-label-group">
-          <label for="finalGrade">Final Exam:</label>
-          <div class="grade-info" id="finalInfo" style="display: none;"></div>
-        </div>
-        <input type="text" id="finalGrade" class="grade-input" placeholder="Enter grade">
-      </div>
     </div>
   </section>
 
@@ -139,8 +58,6 @@
 
   <!-- Footer Section -->
   <footer class="footer">
-    <button id="editWeightsBtn" class="btn btn-secondary">Edit Weights</button>
-    <button id="resetCourseBtn" class="btn btn-secondary">Reset Course</button>
   </footer>
 
   <script type="module" src="popup.js"></script>
