@@ -5,7 +5,7 @@
  */
 
 import { Course, Category, Item } from './models.js';
-import { computeCourseCurrentGrade } from './calc.js';
+import { computeCourseCurrentGrade, computeRequiredGradeOnRemaining, computeMaxPossibleGradeIfPerfect } from './calc.js';
 import { loadCourse, saveCourse } from './storage.js';
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -24,6 +24,7 @@ document.addEventListener('DOMContentLoaded', function () {
   const saveStatus = document.getElementById('saveStatus');
   const categoriesContainer = document.getElementById('categoriesContainer');
   const currentGradeValue = document.getElementById('currentGradeValue');
+  const maxPossibleValue = document.getElementById('maxPossibleValue');
   const requiredGradeValue = document.getElementById('requiredGradeValue');
   const targetGradeInput = document.getElementById('targetGrade');
 
@@ -146,13 +147,34 @@ document.addEventListener('DOMContentLoaded', function () {
       header.appendChild(nameSpan);
       header.appendChild(weightWrap);
 
+      // Add listener to category weight input for dynamic item weight redistribution
+      weightInput.addEventListener('input', (e) => {
+        e.stopPropagation();
+        const newCategoryWeight = parseFloat(weightInput.value);
+        if (!Number.isFinite(newCategoryWeight) || newCategoryWeight <= 0) return;
+        
+        // Find all item weight inputs in this category's body
+        const itemWeightInputs = body.querySelectorAll('.item-weight');
+        if (itemWeightInputs.length === 0) return;
+        
+        // Calculate new weight per item (equal distribution)
+        const weightPerItem = newCategoryWeight / itemWeightInputs.length;
+        
+        // Update each item weight input
+        itemWeightInputs.forEach(input => {
+          input.value = weightPerItem.toFixed(1);
+        });
+        
+        console.log('[Flowdeck] Redistributed item weights:', weightPerItem.toFixed(1), 'per item');
+      });
+
       const body = document.createElement('div');
       body.id = `items-${cat.id}`;
       body.className = 'category-items-body collapsed';
 
       const table = document.createElement('table');
       table.className = 'category-items-table';
-      table.innerHTML = '<thead><tr><th>Item</th><th>Weight (%)</th><th>Grade (%)</th></tr></thead><tbody></tbody>';
+      table.innerHTML = '<thead><tr><th>Item</th><th>Weight (%)</th><th>Grade (%)</th><th>Done</th></tr></thead><tbody></tbody>';
       const tbody = table.querySelector('tbody');
 
       (cat.items || []).forEach((item) => {
@@ -162,6 +184,7 @@ document.addEventListener('DOMContentLoaded', function () {
           <td class="item-name">${escapeHtml(item.name || '')}</td>
           <td><input type="number" class="weight-input item-weight" min="0" max="100" step="0.1" value="${Number.isFinite(item.weight) ? item.weight : ''}" placeholder="0" data-item-id="${escapeHtml(item.id)}"></td>
           <td><input type="number" class="grade-input item-grade" min="0" max="100" step="0.1" value="${Number.isFinite(item.grade) ? item.grade : ''}" placeholder="0-100" data-item-id="${escapeHtml(item.id)}"></td>
+          <td style="text-align: center;"><input type="checkbox" class="done-checkbox" ${item.done ? 'checked' : ''} data-item-id="${escapeHtml(item.id)}" title="Mark as completed"></td>
         `;
         tbody.appendChild(tr);
       });
@@ -224,6 +247,9 @@ document.addEventListener('DOMContentLoaded', function () {
         if (gInput && gInput.value.trim() !== '') {
           const g = parseFloat(gInput.value);
           if (Number.isFinite(g)) item.grade = g;
+        }
+        if (doneCheckbox) {
+          item.done = doneCheckbox.checked;
         }
       });
     });
@@ -300,13 +326,21 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('[Flowdeck] Calc warnings:', calcResult.warnings);
       }
     }
+
+    // Calculate and display max possible grade
+    if (currentCourse && maxPossibleValue) {
+      const maxResult = computeMaxPossibleGradeIfPerfect(currentCourse);
+      maxPossibleValue.textContent = maxResult.message;
+    }
+
+
     if (requiredGradeValue) {
       requiredGradeValue.textContent = '--%';
     }
   }
 
   function updateTargetFromCourse(course) {
-    if (targetGradeInput && course && Number.isFinite(course.target_grade)) {
+    if (targetGradeInput && course && Number.isFinite(course.target_grade) && course.target_grade > 0) {
       targetGradeInput.value = course.target_grade;
     }
   }
@@ -440,6 +474,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
       const calcResult = computeCourseCurrentGrade(currentCourse);
       updateResultsFromCalc(calcResult);
+      
+      // Also update required grade if target is set
+      if (currentCourse.target_grade && Number.isFinite(currentCourse.target_grade)) {
+        const requiredResult = computeRequiredGradeOnRemaining(currentCourse, currentCourse.target_grade);
+        if (requiredGradeValue) {
+          requiredGradeValue.textContent = requiredResult.message;
+        }
+      }
+
       updateCategoryGradeDisplays(currentCourse);
     });
   }
@@ -455,7 +498,17 @@ document.addEventListener('DOMContentLoaded', function () {
     targetGradeInput.addEventListener('input', () => {
       if (currentCourse && targetGradeInput.value.trim() !== '') {
         const v = parseFloat(targetGradeInput.value);
-        if (Number.isFinite(v)) currentCourse.target_grade = v;
+        if (Number.isFinite(v)) {
+          currentCourse.target_grade = v;
+          
+          // Calculate required grade on remaining work
+          const result = computeRequiredGradeOnRemaining(currentCourse, v);
+          
+          // Update the UI with the message
+          if (requiredGradeValue) {
+            requiredGradeValue.textContent = result.message;
+          }
+        }
       }
     });
   }

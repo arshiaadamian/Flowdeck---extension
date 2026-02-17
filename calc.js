@@ -129,3 +129,154 @@ export function computeCourseCurrentGrade(course) {
   console.log('[Flowdeck] calc: computeCourseCurrentGrade', result);
   return result;
 }
+
+/**
+ * Calculates what grade is needed on remaining work to achieve target grade.
+ * Formula: required = (target - current_achieved) / remaining_weight * 100
+ * 
+ * @param {Course|Object} course 
+ * @param {number} targetGrade - Desired final grade (0-100)
+ * @returns {{
+*   required_grade: number,
+*   is_possible: boolean,
+*   remaining_weight: number,
+*   message: string
+* }}
+*/
+export function computeRequiredGradeOnRemaining(course, targetGrade)
+{
+  const c = toInstance(course, Course);
+  const currentGrade = computeCourseCurrentGrade(course);
+  const remainingWeight = 100 - currentGrade.total_weight_entered;
+  const currentGradePoints = currentGrade.current_grade
+  const pointsNeeded = targetGrade - currentGradePoints;
+  const requiredGrade = (pointsNeeded / remainingWeight) * 100;
+
+  if(remainingWeight <= 0)
+    {
+      return {
+        required_grade: 0,
+        is_possible: currentGradePoints >= targetGrade,
+        remaining_weight:0,
+        message: "No remaining work, Current grade is final"
+      };
+    }
+
+  const isPossible = requiredGrade <= 100;
+
+  let message = "";
+  if (isPossible && requiredGrade > 0)
+  {
+    message = `You need ${requiredGrade.toFixed(1)}% on remaining ${remainingWeight}% of work.`;
+  } else if(requiredGrade <= 0)
+  {
+    message = `You already exceeded your target! Current: ${currentGradePoints.toFixed(1)}%`;
+  } else {
+    message = `Target unreachable. Even with 100% on remaining work, max grade to get is: ${(currentGradePoints + remainingWeight).toFixed(1)}%`;
+  }
+
+  console.log("testing computeTargetGrade function: ", {
+    target: targetGrade,
+    current: currentGradePoints,
+    remaining: remainingWeight,
+    required: requiredGrade,
+    possible: isPossible
+  });
+
+  return {
+    required_grade: requiredGrade,
+    is_possible: isPossible,
+    remaining_weight: remainingWeight,
+    message: message
+  };
+
+}
+
+
+/**
+ * Calculates the maximum possible grade if user had gotten 100% on all completed work.
+ * Only considers items where done === true.
+ * 
+ * @param {Course|Object} course 
+ * @returns {{
+*   max_possible_grade: number,
+*   actual_grade: number,
+*   points_lost: number,
+*   message: string
+* }}
+*/
+
+export function computeMaxPossibleGradeIfPerfect(course)
+{
+  const c = toInstance(course, Course);
+
+  let maxPossibleContribution = 0;
+
+  // for each category, calculate what it would contribute if all DONE items were 100%
+  for (const cat of c.categories)
+  {
+    const catInst = toInstance(cat, Category);
+    const catWeight = Number.isFinite(catInst.weight) ? catInst.weight: 0;
+
+    if (catWeight <= 0)
+    {
+      continue;
+    }
+
+    // get only done items.
+    const doneItems = catInst.items.map((it) => toInstance(it, Item))
+                                   .filter((it) => it.done === true);
+
+    if (doneItems.length === 0)
+    {
+      continue;
+    }
+
+    // check if all done items have valid weights
+    const allHaveValidWeights = doneItems.every((it) => Number.isFinite(it.weight) && it.weight > 0);
+
+    let categoryMaxPercent = 100; // assume perfect score on done items
+
+    if (allHaveValidWeights)
+    {
+      categoryMaxPercent = 100
+    }
+    else
+    {
+      const totalItems = catInst.items.length;
+      const doneCount = doneItems.length;
+
+      if (doneCount === totalItems)
+      {
+        categoryMaxPercent = 100;
+      }
+      else
+      {
+        categoryMaxPercent = (doneCount / totalItems) * 100;
+      }
+    }
+
+    // add this category's max contribution
+    const contribution = (categoryMaxPercent / 100) * catWeight;
+    maxPossibleContribution += contribution;
+  }
+
+  // get actual grade
+  const currentGradeResult = computeCourseCurrentGrade(course);
+  const actualGrade = currentGradeResult.current_grade;
+  const pointsLost = maxPossibleContribution - actualGrade;
+
+  let message = '';
+  if (pointsLost > 0.1) {
+    message = `Max: ${maxPossibleContribution.toFixed(1)}% (lost ${pointsLost.toFixed(1)}%)`;
+  } else {
+    message = `Perfect! 🎉, you got all the marks possible so far.`;
+  }
+
+  return {
+    max_possible_grade: maxPossibleContribution,
+    actual_grade: actualGrade,
+    points_lost: pointsLost,
+    message: message
+  };
+}

@@ -222,17 +222,12 @@ const getCategoriesAndItems = (doc, courseId) => {
   const getGradeItemDetialsFromRow = (row) => {
  
     const itemName = cleanText(row.querySelector('th label, th div, th')?.innerText || "Unknown Item");
-    let done = false;
+    let done = rowGrade > 0;
 
     // Handle Dropped
     if (isDropped(row) || (rowPointsText === '-' || !rowPointsText)) { 
       done = false;
-    } else{
-      done = true;
-    }
-
-
-
+    } 
 
     return new Item({
       name: itemName,
@@ -304,7 +299,7 @@ const distributeMissingWeights = (categories) => {
        cat.items.forEach((item,index)=>{
   
          if(item.weight === UNWEIGHTED_CATEGORY_IDENTIFIER){
-          item.weight = 100/ totalItems;
+          item.weight = (cat.weight/ totalItems).toFixed(1);
          }
        })
        
@@ -356,7 +351,7 @@ export function scrapeCourseAndGradesFromPage(dom = document) {
       course_name: name,
       course_number: number,
       current_grade: 0,
-      target_grade: 85,
+      target_grade: 0,
     });
 
     // 3. Scrape "Final Adjusted Grade" if available

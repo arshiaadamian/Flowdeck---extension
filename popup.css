@@ -24,11 +24,11 @@ body {
 }
 
 .logo {
-  width: 32px;
-  height: 32px;
-  background-color: rgba(255, 255, 255, 0.2);
-  border-radius: 6px;
-  object-fit: contain;
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  object-position: center;
+  transform: scale(1.5);
 }
 
 .app-name {
@@ -454,4 +454,48 @@ body {
 
 .btn:active {
   transform: translateY(0);
+}
+
+/* Done checkbox styling */
+.done-checkbox {
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+/* Gray out rows that ARE done (completed work) */
+.category-items-table tr:has(.done-checkbox:checked) {
+  opacity: 0.6;
+  background-color: #f5f5f5;
+}
+
+.category-items-table tr:has(.done-checkbox:checked) .item-name {
+  color: #888;
+}
+
+/* Keep rows that are NOT done (future work) prominent */
+.category-items-table tr:has(.done-checkbox:not(:checked)) {
+  background-color: #fffef0;
+  border-left: 3px solid #ffc107;
+}
+
+.category-items-table tr:has(.done-checkbox:not(:checked)) .item-name {
+  font-weight: 600;
+  color: #333;
+}
+
+/* Highlighted result item (for max possible grade) */
+.result-item-highlight {
+  background-color: #fff9e6;
+  border-left: 3px solid #ffc107;
+}
+
+.result-label-small {
+  font-size: 12px;
+  color: #856404;
+}
+
+.result-value-small {
+  font-size: 14px;
+  color: #856404;
 }
