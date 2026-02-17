@@ -9,6 +9,13 @@ import { computeCourseCurrentGrade, computeRequiredGradeOnRemaining, computeMaxP
 import { loadCourse, saveCourse } from './storage.js';
 
 document.addEventListener('DOMContentLoaded', function () {
+
+  document.getElementById("feedbackBtn").addEventListener("click", function () {
+    document.getElementById("feedbackForm").style.display = "block";
+    console.log("Clicked")
+    this.style.display = "none"; // hides button after click
+  });
+
   console.log('[Flowdeck] Extension popup loaded');
 
   const weightsToggle = document.getElementById('weightsToggle');
@@ -529,3 +536,6 @@ document.addEventListener('DOMContentLoaded', function () {
   fetchCourseFromActiveTab();
   fetchGradesFromLearningHub().catch(() => {});
 });
+
+
+

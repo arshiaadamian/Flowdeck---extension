@@ -60,9 +60,47 @@
     </div>
   </section>
 
-  <!-- Footer Section -->
-  <footer class="footer">
-  </footer>
+
+
+    <button
+            id="feedbackBtn"
+            style="
+    padding: 10px 16px;
+    background: #2563eb;
+    color: white;
+    font-weight: 600;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: Arial, sans-serif;
+  "
+    >
+      Give Us Feedback
+    </button>
+
+    <div id="feedbackForm" style="display:none; margin-top: 15px;">
+      <iframe
+              id="JotFormIFrame-250936223826055"
+              title="Form"
+              onload="window.parent.scrollTo(0,0)"
+              allowtransparency="true"
+              allow="geolocation; microphone; camera; fullscreen; payment"
+              src="https://form.jotform.com/250936223826055"
+              frameborder="0"
+              style="min-width:100%;max-width:100%;height:1039px;border:none;"
+              scrolling="no"
+      ></iframe>
+
+      <script src="https://cdn.jotfor.ms/s/umd/latest/for-form-embed-handler.js"></script>
+      <script>
+        window.jotformEmbedHandler(
+                "iframe[id='JotFormIFrame-250936223826055']",
+                "https://form.jotform.com/"
+        );
+      </script>
+    </div>
+
+
 
   <script type="module" src="popup.js"></script>
 </body>
