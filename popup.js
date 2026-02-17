@@ -240,6 +240,11 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const wInput = tr.querySelector('.item-weight');
         const gInput = tr.querySelector('.item-grade');
+        const doneCheckbox = tr.querySelector('.done-checkbox');
+
+        // console.log('[Flowdeck] doneCheckbox found:', doneCheckbox, 'checked:', doneCheckbox?.checked); // ADD THIS
+
+
         if (wInput && wInput.value.trim() !== '') {
           const w = parseFloat(wInput.value);
           if (Number.isFinite(w)) item.weight = w;
@@ -307,6 +312,7 @@ document.addEventListener('DOMContentLoaded', function () {
               if (si) {
                 if (Number.isFinite(si.weight)) item.weight = si.weight;
                 if (Number.isFinite(si.grade)) item.grade = si.grade;
+                if (typeof si.done === 'boolean') item.done = si.done;
               }
             });
           }

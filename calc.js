@@ -96,14 +96,31 @@ export function computeCourseCurrentGrade(course) {
 
   for (const cat of c.categories) {
     const catInst = toInstance(cat, Category);
-    const weight = Number.isFinite(catInst.weight) ? catInst.weight : 0;
+    const catWeight = Number.isFinite(catInst.weight) ? catInst.weight : 0;
+
+    if (catWeight <= 0) continue;
+
+    const allItems = catInst.items.map((it) => toInstance(it, Item));
+    const doneItems = allItems.filter((it) => it.done === true);
+
+    // If no items, treat whole category as done
+    if (allItems.length === 0) {
+      const catGrade = Number.isFinite(catInst.grade) ? catInst.grade : 0;
+      totalWeightEntered += catWeight;
+      totalContrib += (catGrade / 100) * catWeight;
+      categoriesUsed++;
+      continue;
+    }
+
+    // Only count the portion of weight that is done
+    const doneRatio = doneItems.length / allItems.length;
+    const doneWeight = catWeight * doneRatio;
+
+    if (doneWeight <= 0) continue;
+
     const catGrade = Number.isFinite(catInst.grade) ? catInst.grade : 0;
-
-    if (weight <= 0) continue;
-
-    totalWeightEntered += weight;
-    const contribution = (catGrade / 100) * weight;
-    totalContrib += contribution;
+    totalWeightEntered += doneWeight;
+    totalContrib += (catGrade / 100) * doneWeight;
     categoriesUsed++;
   }
 
@@ -167,7 +184,7 @@ export function computeRequiredGradeOnRemaining(course, targetGrade)
   let message = "";
   if (isPossible && requiredGrade > 0)
   {
-    message = `You need ${requiredGrade.toFixed(1)}% on remaining ${remainingWeight}% of work.`;
+    message = `You need ${requiredGrade.toFixed(1)}% on remaining ${remainingWeight.toFixed(1)}% of work.`;
   } else if(requiredGrade <= 0)
   {
     message = `You already exceeded your target! Current: ${currentGradePoints.toFixed(1)}%`;
