@@ -5,7 +5,7 @@
  */
 
 import { Course, Category, Item } from './models.js';
-import { computeCourseCurrentGrade, computeRequiredGradeOnRemaining, computeMaxPossibleGradeIfPerfect } from './calc.js';
+import { computeCourseCurrentGrade, computeRequiredGradeOnRemaining, computeMaxPossibleGradeIfPerfect, createGradeTrackerUI} from './calc.js';
 import { loadCourse, saveCourse } from './storage.js';
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -501,6 +501,7 @@ document.addEventListener('DOMContentLoaded', function () {
   }
 
   if (editWeightsBtn) editWeightsBtn.addEventListener('click', () => {});
+
   if (resetCourseBtn) resetCourseBtn.addEventListener('click', () => {});
 
   if (refreshGradesBtn) {
@@ -515,12 +516,20 @@ document.addEventListener('DOMContentLoaded', function () {
           currentCourse.target_grade = v;
           
           // Calculate required grade on remaining work
-          const result = computeRequiredGradeOnRemaining(currentCourse, v);
+          //const result = computeRequiredGradeOnRemaining(currentCourse, v);
           
           // Update the UI with the message
           if (requiredGradeValue) {
-            requiredGradeValue.textContent = result.message;
+           // requiredGradeValue.textContent = result.message;
           }
+
+          const trackerElement = createGradeTrackerUI(currentCourse, v, (e)=>{console.log(e)});
+
+// 1. Clear out any old content inside your container first
+          requiredGradeValue.innerHTML = '';
+
+// 2. Append the LIVE DOM element directly (preserves all event listeners and logic!)
+          requiredGradeValue.appendChild(trackerElement);
         }
       }
     });

@@ -64,6 +64,10 @@ export function computeCategoryGradePercent(category) {
   return { grade, doneCount: doneItems.length, totalItems: cat.items.length, usedWeighted };
 }
 
+
+
+
+
 /**
  * Computes the current course grade from categories.
  * - contribution = (category.grade / 100) * category.weight
@@ -147,6 +151,23 @@ export function computeCourseCurrentGrade(course) {
   return result;
 }
 
+function generateEstElementId(category,item) {
+  return `${category.id}_${item.id}_est`;
+}
+function showUndoneCourseWork(course,requiredGrade, remainingWeight) {
+
+  let text = "";
+
+
+  course.categories.forEach((c)=> c.items.forEach((item)=>{
+
+    if(item.done === false){
+      text += c.name + item.name + `<input id='${generateEstElementId(c,item)}' value="">`;
+    }
+
+  }))
+}
+
 /**
  * Calculates what grade is needed on remaining work to achieve target grade.
  * Formula: required = (target - current_achieved) / remaining_weight * 100
@@ -184,7 +205,8 @@ export function computeRequiredGradeOnRemaining(course, targetGrade)
   let message = "";
   if (isPossible && requiredGrade > 0)
   {
-    message = `You need ${requiredGrade.toFixed(1)}% on remaining ${remainingWeight.toFixed(1)}% of work.`;
+    message = `You need ${requiredGrade.toFixed(1)}% on remaining ${remainingWeight.toFixed(1)}% of work.\n\n Remaining work: ${showUndoneCourseWork(requiredGrade,remainingWeight)}`;
+
   } else if(requiredGrade <= 0)
   {
     message = `You already exceeded your target! Current: ${currentGradePoints.toFixed(1)}%`;
@@ -296,4 +318,180 @@ export function computeMaxPossibleGradeIfPerfect(course)
     points_lost: pointsLost,
     message: message
   };
+}
+
+
+
+
+/**
+ * Generates an interactive DOM element tracking remaining required grades.
+ * @param {Object} course - The course object.
+ * @param {number} targetGrade - The desired final grade percentage.
+ * @returns {HTMLElement} - The container element with the UI and logic attached.
+ */
+export  function createGradeTrackerUI(course, targetGrade,console_) {
+  // 1. Setup the main container
+  const container = document.createElement('div');
+  container.className = 'course-tracker-widget';
+  container.style.fontFamily = 'sans-serif';
+  container.style.maxWidth = '500px';
+
+  let currentEarned = 0;
+  let totalRemainingCourseWeight = 0;
+  const remainingItems = [];
+
+  // 2. Parse the course data to calculate current standing and remaining items
+  course.categories.forEach(category => {
+    category.items.forEach(item => {
+
+      if (item.done) {
+        currentEarned += (item.grade / 100) * item.weight ;
+      } else {
+        remainingItems.push({
+          id: item.id,
+          name: item.name,
+          categoryName: category.category,
+          courseWeight:  item.weight ,
+          manualGrade: null, // null means we auto-calculate this
+          currentDisplayGrade: 0
+        });
+        totalRemainingCourseWeight +=  item.weight ;
+      }
+    });
+  });
+
+  // 3. Check Base Reachability
+  if (currentEarned >= targetGrade) {
+    container.innerHTML = `<h3>Goal Achieved! 🎉</h3>
+      <p>You currently have <strong>${currentEarned.toFixed(2)}%</strong>, which already meets or beats your target of ${targetGrade}%.</p>`;
+    return container;
+  }
+
+  const maxPossibleOverall = currentEarned + totalRemainingCourseWeight;
+  if (maxPossibleOverall < targetGrade) {
+    container.innerHTML = `<h3>Target Unreachable ⚠️</h3>
+      <p>You currently have <strong>${currentEarned.toFixed(2)}%</strong>. Even if you get 100% on everything left, you will max out at <strong>${maxPossibleOverall.toFixed(2)}%</strong> (Target: ${targetGrade}%).</p>`;
+    return container;
+  }
+
+  // 4. Calculate initial even distribution
+  const totalGradeNeeded = targetGrade - currentEarned;
+  const initialRequiredAverage = (totalGradeNeeded / totalRemainingCourseWeight) * 100;
+
+  remainingItems.forEach(item => {
+    console_(JSON.stringify(item)  + " data dhjdhdj ")
+    item.currentDisplayGrade = initialRequiredAverage;
+  });
+
+  // 5. Build the Interactive UI
+  container.innerHTML = `
+    <h3>Target: ${targetGrade}% | Current: ${currentEarned.toFixed(2)}%</h3>
+    <p>You need to earn <strong>${totalGradeNeeded.toFixed(2)}%</strong> more overall.</p>
+    <div id="warning-message" style="color: red; font-weight: bold; margin-bottom: 15px; display: none;">
+      ⚠️ Warning: Your target is unreachable with these manually set grades!
+    </div>
+    <br><br>
+    <div id="items-container"></div>
+  `;
+
+  const itemsContainer = container.querySelector('#items-container');
+  const warningMessage = container.querySelector('#warning-message');
+
+  // Generate input fields for each remaining item
+  remainingItems.forEach(item => {
+    const itemRow = document.createElement('div');
+    itemRow.style.display = 'flex';
+    itemRow.style.justifyContent = 'space-between';
+    itemRow.style.alignItems = 'center';
+    itemRow.style.marginBottom = '10px';
+    itemRow.style.padding = '10px';
+    itemRow.style.background = '#f4f4f4';
+    itemRow.style.borderRadius = '5px';
+
+
+    const label = document.createElement('label');
+    label.htmlFor = `input_${item.id}`;
+    label.innerHTML = `<strong>${item.name}</strong> <br><small>${item.categoryName} (Course Weight: ${item.courseWeight}%)</small>`;
+
+    const inputWrapper = document.createElement('div');
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.id = `input_${item.id}`;
+    input.value = input.value = item.currentDisplayGrade.toFixed(2);
+    input.min = "0";
+    input.max = "100";
+    input.style.width = '70px';
+    input.style.padding = '5px';
+
+    inputWrapper.appendChild(input);
+    inputWrapper.appendChild(document.createTextNode(' %'));
+
+    itemRow.appendChild(label);
+    itemRow.appendChild(inputWrapper);
+    itemsContainer.appendChild(itemRow);
+
+    // 6. Attach Event Listeners for Dynamic Recalculation
+    input.addEventListener('input', (e) => {
+      const val = e.target.value;
+
+      // If user clears the input, revert it to auto-calculate mode
+      if (val === '') {
+        item.manualGrade = null;
+      } else {
+        item.manualGrade = parseFloat(val);
+      }
+
+      recalculateGrades();
+    });
+  });
+
+  // 7. Core Recalculation Logic
+  function recalculateGrades() {
+    let manualEarnedCoursePercentage = 0;
+    let remainingAutoWeight = 0;
+
+    // Figure out what has been manually locked in, and what weight is left for auto-distribution
+    remainingItems.forEach(item => {
+      if (item.manualGrade !== null) {
+        manualEarnedCoursePercentage += (item.manualGrade / 100) * item.courseWeight;
+      } else {
+        remainingAutoWeight += item.courseWeight;
+      }
+    });
+
+    const newShortfall = totalGradeNeeded - manualEarnedCoursePercentage;
+
+    // Edge case: All items are manually edited
+    if (remainingAutoWeight === 0) {
+      // Allow a tiny floating point buffer (0.01)
+      if (newShortfall > 0.01) {
+        warningMessage.style.display = 'block';
+      } else {
+        warningMessage.style.display = 'none';
+      }
+      return;
+    }
+
+    // Calculate what the remaining untouched items need to average
+    const requiredAutoAverage = (newShortfall / remainingAutoWeight) * 100;
+
+    if (requiredAutoAverage > 100) {
+      warningMessage.style.display = 'block';
+    } else {
+      warningMessage.style.display = 'none';
+
+      // Update the input values for everything the user hasn't manually touched
+      remainingItems.forEach(item => {
+        if (item.manualGrade === null) {
+          item.currentDisplayGrade = Math.max(0, requiredAutoAverage); // Don't show negative grades
+          const inputEl = container.querySelector(`#input_${item.id}`);
+          if (inputEl) {
+            inputEl.value = item.currentDisplayGrade.toFixed(2);
+          }
+        }
+      });
+    }
+  }
+
+  return container;
 }
