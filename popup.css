@@ -499,3 +499,22 @@ body {
   font-size: 14px;
   color: #856404;
 }
+
+.feedback-button-container{
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+.feedback-button{
+  padding: 10px 16px;
+  background:  #004489;
+  color: white;
+  font-weight: 600;
+  border: none;
+  margin: 1rem auto;
+
+  border-radius: 8px;
+  cursor: pointer;
+  font-family: Arial, sans-serif;
+}

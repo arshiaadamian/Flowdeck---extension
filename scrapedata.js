@@ -291,6 +291,7 @@ const getCategoriesAndItems = (doc, courseId) => {
  */
 const distributeMissingWeights = (categories) => {
   const total_categories = categories.length;
+  console.log(`Distributed ${total_categories} of ${JSON.stringify(categories)}`);
 
   categories.forEach(cat => {
     if(cat.weight === UNWEIGHTED_CATEGORY_IDENTIFIER){
@@ -370,7 +371,7 @@ export function scrapeCourseAndGradesFromPage(dom = document) {
     }
 
     // 4. Scrape Categories and Items
-    const categories = getCategoriesAndItems(dom, course.id);
+    const categories = getCategoriesAndItems(dom, course.id).filter((e)=> e !== null);
 
     // 5. Post-process weights
     distributeMissingWeights(categories);
