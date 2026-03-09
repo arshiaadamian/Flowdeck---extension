@@ -3,6 +3,9 @@
   "name": "Flowdeck",
   "version": "1.0.0",
   "description": "A grade calculator extension for course management",
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -17,7 +20,10 @@
     "128": "icons/flowdeck-icon.png"
   },
   "permissions": ["activeTab", "storage"],
-  "host_permissions": ["https://learn.bcit.ca/*"],
+  "host_permissions": [
+    "https://learn.bcit.ca/*",
+    "https://www.bcit.ca/outlines/*"
+  ],
   "content_scripts": [
     {
       "matches": ["https://learn.bcit.ca/*"],

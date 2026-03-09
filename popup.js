@@ -39,6 +39,79 @@ document.addEventListener('DOMContentLoaded', function () {
   /** @type {Course|null} */
   let currentCourse = null;
 
+  /**
+   * Fetch and parse outline weights directly from the popup (no background hop).
+   * @param {string} outlineUrl
+   * @returns {Promise<{ok: boolean, weights?: Array<{name: string, weight: number}>, error?: string}>}
+   */
+  async function fetchOutlineWeightsInPopup(outlineUrl) {
+    try {
+      console.log('[Flowdeck] [Outline] Fetching outline directly from popup:', outlineUrl);
+      const response = await fetch(outlineUrl);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const htmlText = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(htmlText, 'text/html');
+
+      // Find evaluation table by looking for "Evaluation Criteria" heading
+      const headings = doc.querySelectorAll('h3');
+      let evalTable = null;
+
+      for (const heading of headings) {
+        if ((heading.textContent || '').toLowerCase().includes('evaluation criteria')) {
+          let sibling = heading.nextElementSibling;
+          while (sibling) {
+            if (sibling.tagName === 'TABLE') {
+              evalTable = sibling;
+              break;
+            }
+            const nestedTable = sibling.querySelector && sibling.querySelector('table');
+            if (nestedTable) {
+              evalTable = nestedTable;
+              break;
+            }
+            sibling = sibling.nextElementSibling;
+          }
+          break;
+        }
+      }
+
+      if (!evalTable) {
+        console.warn('[Flowdeck] [Outline] No evaluation table found');
+        return { ok: false, error: 'No evaluation table found' };
+      }
+
+      const weights = [];
+      const rows = evalTable.querySelectorAll('tbody tr');
+
+      rows.forEach((row) => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 2) {
+          const name = (cells[0].textContent || '').trim();
+          const weightText = (cells[1].textContent || '').trim();
+          const weightMatch = weightText.match(/[\d.]+/);
+
+          if (name && weightMatch) {
+            const weight = parseFloat(weightMatch[0]);
+            if (!Number.isNaN(weight)) {
+              weights.push({ name, weight });
+              console.log(`[Flowdeck] [Outline] Found: ${name} = ${weight}%`);
+            }
+          }
+        }
+      });
+
+      console.log(`[Flowdeck] [Outline] Successfully extracted ${weights.length} weights`);
+      return { ok: true, weights };
+    } catch (err) {
+      console.error('[Flowdeck] [Outline] Fetch/parse error:', err);
+      return { ok: false, error: err?.message || String(err) };
+    }
+  }
+
   // --- UI Helpers ---
 
   function showSaveStatus(message, type) {
@@ -443,6 +516,61 @@ document.addEventListener('DOMContentLoaded', function () {
           if (autoFetchWarning) autoFetchWarning.style.display = 'flex';
 
           const course = await buildCourseFromResponse(response.course);
+          
+          // --- Try to fetch and apply outline weights (best-effort, non-fatal) ---
+          try {
+            console.log('[Flowdeck] Attempting to fetch outline weights...');
+            
+            // Step 1: Ask content script for the outline URL
+            const urlResult = await new Promise((resolveOutline) => {
+              chrome.tabs.sendMessage(
+                tab.id,
+                { type: 'FLOWDECK_GET_OUTLINE_URL' },
+                (outlineResponse) => {
+                  resolveOutline(outlineResponse || { ok: false });
+                }
+              );
+            });
+
+            if (!urlResult.ok || !urlResult.outlineUrl) {
+              console.log('[Flowdeck] Could not get outline URL:', urlResult.error || 'unknown');
+              // Continue without weights - non-fatal
+            } else {
+              console.log('[Flowdeck] Got outline URL:', urlResult.outlineUrl);
+
+              // Step 2: Fetch outline directly from popup (uses host_permissions)
+              const weightsResult = await fetchOutlineWeightsInPopup(urlResult.outlineUrl);
+
+              if (weightsResult.ok && Array.isArray(weightsResult.weights)) {
+                console.log('[Flowdeck] Successfully fetched outline weights:', weightsResult.weights);
+                
+                // Step 3: Apply weights to categories (fuzzy matching)
+                weightsResult.weights.forEach(({ name, weight }) => {
+                  // Try to match outline category name to scraped category name
+                  const matchedCategory = course.categories.find(c => {
+                    const catName = (c.category || '').toLowerCase();
+                    const outlineName = name.toLowerCase();
+                    // Bidirectional includes for fuzzy matching
+                    return catName.includes(outlineName) || outlineName.includes(catName);
+                  });
+
+                  if (matchedCategory) {
+                    matchedCategory.weight = weight;
+                    console.log(`[Flowdeck] Applied weight from outline: ${name} → ${matchedCategory.category} = ${weight}%`);
+                  } else {
+                    console.log(`[Flowdeck] No match found for outline category: ${name}`);
+                  }
+                });
+              } else {
+                console.log('[Flowdeck] Could not fetch outline weights:', weightsResult.error || 'unknown');
+                // Continue without weights - non-fatal
+              }
+            }
+          } catch (outlineErr) {
+            console.warn('[Flowdeck] Outline fetch failed (non-fatal):', outlineErr);
+            // Continue without weights - this is best-effort
+          }
+          
           currentCourseKey = course.id || currentCourseKey;
           currentCourse = course;
 

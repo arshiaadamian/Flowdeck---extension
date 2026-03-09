@@ -41,12 +41,52 @@ function getCourseFromNav() {
   return { ok: true, courseName, courseKey: `d2l-${m[1]}` };
 }
 
+/**
+ * Extract BCIT course outline URL from the page's heContext metadata.
+ * Looks at data-he-context on <html> to derive term + section id.
+ * @returns {{ok: boolean, outlineUrl?: string, error?: string}}
+ */
+function getOutlineUrlFromPage() {
+  try {
+    const heContextRaw = document.documentElement?.dataset?.heContext;
+    if (!heContextRaw) {
+      return { ok: false, error: 'data-he-context not found' };
+    }
+
+    const heContext = JSON.parse(heContextRaw);
+    const orgUnitPath = heContext?.orgUnitPath;
+    
+    // Pattern: "/content/enforced/1158526-37024.202530/"
+    const match = orgUnitPath.match(/\/(\d+)-(\d+)\.(\d+)\//);
+    if (!match) {
+      return { ok: false, error: 'Could not parse orgUnitPath' };
+    }
+
+    const sectionId = match[2];  // "37024"
+    const term = match[3];       // "202530"
+    const outlineUrl = `https://www.bcit.ca/outlines/${term}${sectionId}/`;
+    
+    console.log('[Flowdeck] Built outline URL:', outlineUrl);
+    return { ok: true, outlineUrl };
+  } catch (err) {
+    console.error('[Flowdeck] Error building outline URL:', err);
+    return { ok: false, error: err.message };
+  }
+}
+
 chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
   console.log('[Flowdeck] Message received:', request?.type);
 
   if (request.type === 'FLOWDECK_GET_COURSE') {
     const result = getCourseFromNav();
     console.log('[Flowdeck] GET_COURSE response:', result.ok ? result.courseKey : 'not found');
+    sendResponse(result);
+    return false;
+  }
+
+  if (request.type === 'FLOWDECK_GET_OUTLINE_URL') {
+    const result = getOutlineUrlFromPage();
+    console.log('[Flowdeck] GET_OUTLINE_URL response:', result.ok ? result.outlineUrl : result.error);
     sendResponse(result);
     return false;
   }
