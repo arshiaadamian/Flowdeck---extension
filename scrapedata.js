@@ -224,10 +224,10 @@ const getCategoriesAndItems = (doc, courseId) => {
     const itemName = cleanText(row.querySelector('th label, th div, th')?.innerText || "Unknown Item");
     let done = rowGrade > 0;
 
-    // Handle Dropped
-    if (isDropped(row) || (rowPointsText === '-' || !rowPointsText)) { 
+    // Handle Dropped or truly ungraded (no points, no grade, or explicit dash)
+    if (isDropped(row) || rowPointsText === '-' || (!rowHasPoints && !rowHasGrade && !rowHasWeight)) {
       done = false;
-    } 
+    }
 
     return new Item({
       name: itemName,
@@ -285,9 +285,65 @@ const getCategoriesAndItems = (doc, courseId) => {
 
 /**
  * POST-PROCESSING
+ * Groups standalone categories whose names start with "Quiz" into a single "Quizzes" category.
+ * Some instructors create individual grade items named "Quiz 1", "Quiz 2", etc.
+ * instead of nesting them under a parent "Quizzes" category.
+ * Only triggers when 2+ such categories are detected.
+ *
+ * @param {Category[]} categories
+ * @returns {Category[]}
+ */
+const groupQuizCategories = (categories) => {
+  const quizPattern = /^quiz/i;
+  const quizCats = categories.filter(cat => quizPattern.test(cat.category.trim()));
+
+  if (quizCats.length < 2) return categories;
+
+  const quizzesCategory = new Category({
+    course_id: quizCats[0].course_id,
+    category: 'Quizzes',
+    weight: UNWEIGHTED_CATEGORY_IDENTIFIER,
+    grade: 0,
+    items: []
+  });
+
+  quizCats.forEach(cat => {
+    if (cat.items.length > 0) {
+      cat.items.forEach(item => quizzesCategory.addItem(item));
+    } else {
+      // Category row with no children — synthesize an item from the category-level data
+      quizzesCategory.addItem(new Item({
+        name: cat.category,
+        grade: cat.grade,
+        done: cat.grade > 0,
+        weight: UNWEIGHTED_CATEGORY_IDENTIFIER
+      }));
+    }
+  });
+
+  // Rebuild list: replace the first quiz category with the merged one, drop the rest
+  const result = [];
+  let merged = false;
+  for (const cat of categories) {
+    if (quizPattern.test(cat.category.trim())) {
+      if (!merged) {
+        result.push(quizzesCategory);
+        merged = true;
+      }
+    } else {
+      result.push(cat);
+    }
+  }
+
+  console.log(`[Flowdeck] Grouped ${quizCats.length} quiz categories into "Quizzes"`);
+  return result;
+};
+
+/**
+ * POST-PROCESSING
  * Handle the edge case where D2L doesn't give us the category weight,
  * requiring us to distribute weight based on item count.
- * * @param {Category[]} categories 
+ * * @param {Category[]} categories
  */
 const distributeMissingWeights = (categories) => {
   const total_categories = categories.length;
@@ -371,12 +427,15 @@ export function scrapeCourseAndGradesFromPage(dom = document) {
     }
 
     // 4. Scrape Categories and Items
-    const categories = getCategoriesAndItems(dom, course.id).filter((e)=> e !== null);
+    const rawCategories = getCategoriesAndItems(dom, course.id).filter((e) => e !== null);
 
-    // 5. Post-process weights
+    // 5. Group standalone "Quiz N" items into a single Quizzes category
+    const categories = groupQuizCategories(rawCategories);
+
+    // 6. Post-process weights
     distributeMissingWeights(categories);
 
-    // 6. Add categories to course
+    // 7. Add categories to course
     categories.forEach((cat) => course.addCategory(cat));
 
     const courseJson = course.toJson();

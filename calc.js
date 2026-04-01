@@ -34,28 +34,35 @@ export function computeCategoryGradePercent(category) {
     .map((it) => toInstance(it, Item))
     .filter((it) => it.done === true);
 
-  if (doneItems.length === 0) {
-    cat.grade = 0;
-    return { grade: 0, doneCount: 0, totalItems: cat.items.length, usedWeighted: false };
+  // Exclude items with explicit weight of 0 — they contribute nothing to the grade
+  const gradableDoneItems = doneItems.filter((it) => !(Number.isFinite(it.weight) && it.weight === 0));
+
+  if (gradableDoneItems.length === 0) {
+    // Only zero out the grade if the category actually has items but none are done.
+    // If the category has no items at all, its grade comes directly from D2L — preserve it.
+    if (cat.items.length > 0) {
+      cat.grade = 0;
+    }
+    return { grade: cat.grade, doneCount: 0, totalItems: cat.items.length, usedWeighted: false };
   }
 
-  // Check if ALL done items have valid weights
-  const allHaveValidWeights = doneItems.every((it) => Number.isFinite(it.weight) && it.weight > 0);
+  // Check if ALL gradable done items have valid weights
+  const allHaveValidWeights = gradableDoneItems.every((it) => Number.isFinite(it.weight) && it.weight > 0);
 
   let grade = 0;
   let usedWeighted = false;
 
   if (allHaveValidWeights) {
     // Weighted average
-    const totalWeight = doneItems.reduce((acc, it) => acc + it.weight, 0);
-    const weightedSum = doneItems.reduce((acc, it) => acc + (it.grade * it.weight), 0);
+    const totalWeight = gradableDoneItems.reduce((acc, it) => acc + it.weight, 0);
+    const weightedSum = gradableDoneItems.reduce((acc, it) => acc + (it.grade * it.weight), 0);
     grade = weightedSum / totalWeight;
     usedWeighted = true;
     console.log('[Flowdeck] Category weighted average:', cat.category, 'grade:', grade.toFixed(2));
   } else {
     // Simple average fallback
-    const sum = doneItems.reduce((acc, it) => acc + it.grade, 0);
-    grade = sum / doneItems.length;
+    const sum = gradableDoneItems.reduce((acc, it) => acc + it.grade, 0);
+    grade = sum / gradableDoneItems.length;
     usedWeighted = false;
     console.log('[Flowdeck] Category simple average:', cat.category, 'grade:', grade.toFixed(2));
   }
@@ -116,8 +123,13 @@ export function computeCourseCurrentGrade(course) {
       continue;
     }
 
-    // Only count the portion of weight that is done
-    const doneRatio = doneItems.length / allItems.length;
+    // Exclude 0-weight items from the done ratio — they don't represent real course work
+    const countableItems = allItems.filter((it) => !(Number.isFinite(it.weight) && it.weight === 0));
+    const countableDoneItems = doneItems.filter((it) => !(Number.isFinite(it.weight) && it.weight === 0));
+
+    if (countableItems.length === 0) continue;
+
+    const doneRatio = countableDoneItems.length / countableItems.length;
     const doneWeight = catWeight * doneRatio;
 
     if (doneWeight <= 0) continue;
@@ -154,18 +166,14 @@ export function computeCourseCurrentGrade(course) {
 function generateEstElementId(category,item) {
   return `${category.id}_${item.id}_est`;
 }
-function showUndoneCourseWork(course,requiredGrade, remainingWeight) {
-
+function showUndoneCourseWork(course) {
   let text = "";
-
-
-  course.categories.forEach((c)=> c.items.forEach((item)=>{
-
-    if(item.done === false){
+  course.categories.forEach((c) => c.items.forEach((item) => {
+    if (item.done === false) {
       text += c.name + item.name + `<input id='${generateEstElementId(c,item)}' value="">`;
     }
-
-  }))
+  }));
+  return text;
 }
 
 /**
@@ -205,7 +213,7 @@ export function computeRequiredGradeOnRemaining(course, targetGrade)
   let message = "";
   if (isPossible && requiredGrade > 0)
   {
-    message = `You need ${requiredGrade.toFixed(1)}% on remaining ${remainingWeight.toFixed(1)}% of work.\n\n Remaining work: ${showUndoneCourseWork(requiredGrade,remainingWeight)}`;
+    message = `You need ${requiredGrade.toFixed(1)}% on remaining ${remainingWeight.toFixed(1)}% of work.\n\n Remaining work: ${showUndoneCourseWork(c)}`;
 
   } else if(requiredGrade <= 0)
   {
@@ -259,6 +267,14 @@ export function computeMaxPossibleGradeIfPerfect(course)
 
     if (catWeight <= 0)
     {
+      continue;
+    }
+
+    // Category with no items — D2L already gave us its grade directly (e.g. Chapter Quizzes).
+    // Count it as fully done at its reported grade.
+    if (catInst.items.length === 0) {
+      const catGrade = Number.isFinite(catInst.grade) ? catInst.grade : 0;
+      maxPossibleContribution += (catGrade / 100) * catWeight;
       continue;
     }
 
@@ -324,6 +340,91 @@ export function computeMaxPossibleGradeIfPerfect(course)
 
 
 /**
+ * Computes a per-item required grade breakdown.
+ *
+ * For each undone item X with course-level weight W_X, calculates:
+ *   requiredScore = (pointsNeeded − (targetGrade/100) × (remainingWeight − W_X)) / W_X × 100
+ *
+ * This gives a distinct required score per item: assuming all other remaining
+ * items achieve exactly targetGrade%, what score does this item need?
+ *
+ * @param {Course|Object} course
+ * @param {number} targetGrade - Desired final grade (0-100)
+ * @returns {{
+ *   alreadyMet: boolean,
+ *   impossible?: boolean,
+ *   currentEarned: number,
+ *   remainingWeight: number,
+ *   requiredAverage: number,
+ *   maxPossible: number,
+ *   items: Array<{name, category, courseWeight, pointsNeeded, requiredScore, achievable}>
+ * }}
+ */
+export function computePerItemRequiredBreakdown(course, targetGrade) {
+  const c = toInstance(course, Course);
+  const gradeResult = computeCourseCurrentGrade(c);
+  const currentEarned = gradeResult.current_grade;
+  const remainingWeight = 100 - gradeResult.total_weight_entered;
+
+  if (currentEarned >= targetGrade) {
+    return { alreadyMet: true, currentEarned, targetGrade };
+  }
+
+  if (remainingWeight <= 0) {
+    return { alreadyMet: false, impossible: true, currentEarned, remainingWeight: 0, maxPossible: currentEarned, items: [] };
+  }
+
+  const pointsNeeded = targetGrade - currentEarned;
+  const requiredAverage = (pointsNeeded / remainingWeight) * 100;
+  const items = [];
+
+  for (const cat of c.categories) {
+    const catInst = toInstance(cat, Category);
+    const catWeight = Number.isFinite(catInst.weight) ? catInst.weight : 0;
+    if (catWeight <= 0) continue;
+
+    // Category with no child items is already fully accounted for (no undone items)
+    if (catInst.items.length === 0) continue;
+
+    const allItems = catInst.items.map(it => toInstance(it, Item));
+    const countableItems = allItems.filter(it => !(Number.isFinite(it.weight) && it.weight === 0));
+    const undoneItems = countableItems.filter(it => !it.done);
+    if (undoneItems.length === 0) continue;
+
+    const allHaveWeights = countableItems.every(it => Number.isFinite(it.weight) && it.weight > 0);
+
+    for (const item of undoneItems) {
+      const courseWeight = allHaveWeights ? item.weight : catWeight / countableItems.length;
+
+      // Every remaining item needs the same blended required score — this is the only
+      // collectively consistent answer. Different per-item numbers are only valid if
+      // some items are assumed to score differently than others, which we don't know.
+      items.push({
+        name: item.name,
+        category: catInst.category,
+        courseWeight: parseFloat(courseWeight.toFixed(1)),
+        // Course points this item must contribute to reach the target
+        pointsNeeded: parseFloat(((requiredAverage / 100) * courseWeight).toFixed(1)),
+        requiredScore: parseFloat(requiredAverage.toFixed(1)),
+        achievable: requiredAverage <= 100,
+      });
+    }
+  }
+
+  return {
+    alreadyMet: false,
+    impossible: requiredAverage > 100,
+    currentEarned,
+    remainingWeight,
+    pointsNeeded,
+    requiredAverage,
+    maxPossible: parseFloat((currentEarned + remainingWeight).toFixed(1)),
+    items,
+  };
+}
+
+
+/**
  * Generates an interactive DOM element tracking remaining required grades.
  * @param {Object} course - The course object.
  * @param {number} targetGrade - The desired final grade percentage.
@@ -336,26 +437,24 @@ export  function createGradeTrackerUI(course, targetGrade,console_) {
   container.style.fontFamily = 'sans-serif';
   container.style.maxWidth = '500px';
 
-  let currentEarned = 0;
-  let totalRemainingCourseWeight = 0;
+  // Use the authoritative grade function so currentEarned always matches the displayed grade
+  const gradeCalc = computeCourseCurrentGrade(course);
+  const currentEarned = gradeCalc.current_grade;
+  const totalRemainingCourseWeight = 100 - gradeCalc.total_weight_entered;
   const remainingItems = [];
 
-  // 2. Parse the course data to calculate current standing and remaining items
+  // 2. Parse the course data to collect remaining (undone) items for the interactive UI
   course.categories.forEach(category => {
     category.items.forEach(item => {
-
-      if (item.done) {
-        currentEarned += (item.grade / 100) * item.weight ;
-      } else {
+      if (!item.done) {
         remainingItems.push({
           id: item.id,
           name: item.name,
           categoryName: category.category,
-          courseWeight:  item.weight ,
-          manualGrade: null, // null means we auto-calculate this
+          courseWeight: item.weight || 0,
+          manualGrade: null,
           currentDisplayGrade: 0
         });
-        totalRemainingCourseWeight +=  item.weight ;
       }
     });
   });

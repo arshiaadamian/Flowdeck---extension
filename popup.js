@@ -5,7 +5,7 @@
  */
 
 import { Course, Category, Item } from './models.js';
-import { computeCourseCurrentGrade, computeRequiredGradeOnRemaining, computeMaxPossibleGradeIfPerfect, createGradeTrackerUI} from './calc.js';
+import { computeCourseCurrentGrade, computeMaxPossibleGradeIfPerfect, computePerItemRequiredBreakdown } from './calc.js';
 import { loadCourse, saveCourse } from './storage.js';
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -135,10 +135,11 @@ document.addEventListener('DOMContentLoaded', function () {
   
   function computeCategoryGrade(category) {
     if (!category || !category.items || category.items.length === 0) {
-      return null;
+      // No items — use the category-level grade from D2L directly (e.g. Chapter Quizzes).
+      return (category && Number.isFinite(category.grade) && category.grade > 0) ? category.grade : null;
     }
     
-    const itemsWithGrades = category.items.filter(item => Number.isFinite(item.grade));
+    const itemsWithGrades = category.items.filter(item => item.done === true && Number.isFinite(item.grade));
     if (itemsWithGrades.length === 0) {
       return null;
     }
@@ -208,7 +209,7 @@ document.addEventListener('DOMContentLoaded', function () {
       weightInput.className = 'weight-input';
       weightInput.min = '0';
       weightInput.max = '100';
-      weightInput.step = '0.1';
+      weightInput.step = '1';
       weightInput.value = Number.isFinite(cat.weight) ? cat.weight : '';
       weightInput.placeholder = '0';
       weightInput.dataset.categoryId = cat.id;
@@ -391,7 +392,9 @@ document.addEventListener('DOMContentLoaded', function () {
               const si = savedItemById.get(item.id) || savedItemByName.get((item.name || '').toLowerCase());
               if (si) {
                 if (Number.isFinite(si.weight)) item.weight = si.weight;
-                if (Number.isFinite(si.grade)) item.grade = si.grade;
+                // Only restore a saved grade if the fresh scrape has no grade yet (grade = 0).
+                // If D2L returned a real grade, always trust the scrape over stale saved data.
+                if (Number.isFinite(si.grade) && si.grade > 0 && (!Number.isFinite(item.grade) || item.grade === 0)) item.grade = si.grade;
                 if (typeof si.done === 'boolean') item.done = si.done;
               }
             });
@@ -399,7 +402,67 @@ document.addEventListener('DOMContentLoaded', function () {
         }
       });
     }
+    normalizeDoneFlags(course);
     return course;
+  }
+
+  // --- Per-item required grade breakdown renderer ---
+
+  function renderPerItemBreakdown(course, targetGrade) {
+    const breakdown = computePerItemRequiredBreakdown(course, targetGrade);
+    const container = document.createElement('div');
+    container.className = 'breakdown-container';
+
+    if (breakdown.alreadyMet) {
+      container.innerHTML = `<div class="breakdown-success">Goal achieved! Your current grade of ${breakdown.currentEarned.toFixed(1)}% already meets your target of ${targetGrade}%.</div>`;
+      return container;
+    }
+
+    if (breakdown.impossible || breakdown.items.length === 0) {
+      const maxStr = Number.isFinite(breakdown.maxPossible) ? ` Max possible grade: <strong>${breakdown.maxPossible.toFixed(1)}%</strong>.` : '';
+      container.innerHTML = `<div class="breakdown-impossible">Target of ${targetGrade}% is unreachable.${maxStr}</div>`;
+      return container;
+    }
+
+    const summary = document.createElement('p');
+    summary.className = 'breakdown-summary';
+    summary.textContent = `Blended required: ${breakdown.requiredAverage.toFixed(1)}% on remaining ${breakdown.remainingWeight.toFixed(1)}% of course`;
+    container.appendChild(summary);
+
+    const table = document.createElement('table');
+    table.className = 'breakdown-table';
+    table.innerHTML = `<thead><tr><th>Item</th><th>Weight</th><th>Need</th></tr></thead><tbody></tbody>`;
+    const tbody = table.querySelector('tbody');
+
+    breakdown.items.forEach(item => {
+      const tr = document.createElement('tr');
+      let scoreCell;
+      if (item.requiredScore <= 0) {
+        scoreCell = `<span class="score-easy">No minimum</span>`;
+      } else if (item.achievable) {
+        scoreCell = `<span class="score-ok">${item.requiredScore.toFixed(1)}%</span>`;
+      } else {
+        scoreCell = `<span class="score-hard">${item.requiredScore.toFixed(1)}% ⚠</span>`;
+      }
+      tr.innerHTML = `<td class="breakdown-item-name" title="${escapeHtml(item.category)}">${escapeHtml(item.name)}</td><td>${item.courseWeight.toFixed(1)}%</td><td>${scoreCell}</td>`;
+      tbody.appendChild(tr);
+    });
+
+    container.appendChild(table);
+    return container;
+  }
+
+  // --- Normalize done flags after any data load ---
+  // Items with a valid grade (> 0) are always done, regardless of stale saved state.
+  function normalizeDoneFlags(course) {
+    if (!course || !course.categories) return;
+    course.categories.forEach(cat => {
+      (cat.items || []).forEach(item => {
+        if (Number.isFinite(item.grade) && item.grade > 0) {
+          item.done = true;
+        }
+      });
+    });
   }
 
   // --- UI update from course / calc ---
@@ -453,6 +516,7 @@ document.addEventListener('DOMContentLoaded', function () {
             const saved = await loadCourse(currentCourseKey);
             if (saved) {
               currentCourse = Course.fromJson(saved);
+              normalizeDoneFlags(currentCourse);
               renderCategoriesAndItems(currentCourse);
               const calcResult = computeCourseCurrentGrade(currentCourse);
               updateResultsFromCalc(calcResult);
@@ -543,11 +607,14 @@ document.addEventListener('DOMContentLoaded', function () {
 
               if (weightsResult.ok && Array.isArray(weightsResult.weights)) {
                 console.log('[Flowdeck] Successfully fetched outline weights:', weightsResult.weights);
-                
+
                 // Step 3: Apply weights to categories (fuzzy matching)
+                const matchedCategories = new Set();
+
                 weightsResult.weights.forEach(({ name, weight }) => {
                   // Try to match outline category name to scraped category name
                   const matchedCategory = course.categories.find(c => {
+                    if (matchedCategories.has(c)) return false; // don't double-match
                     const catName = (c.category || '').toLowerCase();
                     const outlineName = name.toLowerCase();
                     // Bidirectional includes for fuzzy matching
@@ -556,11 +623,26 @@ document.addEventListener('DOMContentLoaded', function () {
 
                   if (matchedCategory) {
                     matchedCategory.weight = weight;
+                    matchedCategories.add(matchedCategory);
                     console.log(`[Flowdeck] Applied weight from outline: ${name} → ${matchedCategory.category} = ${weight}%`);
                   } else {
                     console.log(`[Flowdeck] No match found for outline category: ${name}`);
                   }
                 });
+
+                // Step 4: Distribute remaining weight to unmatched categories
+                const unmatchedCategories = course.categories.filter(c => !matchedCategories.has(c));
+                if (unmatchedCategories.length > 0) {
+                  const totalMatched = Array.from(matchedCategories).reduce((sum, c) => sum + (c.weight || 0), 0);
+                  const remaining = parseFloat((100 - totalMatched).toFixed(1));
+                  if (remaining > 0) {
+                    const perCategory = parseFloat((remaining / unmatchedCategories.length).toFixed(1));
+                    unmatchedCategories.forEach(c => {
+                      c.weight = perCategory;
+                      console.log(`[Flowdeck] Assigned remaining weight to unmatched: ${c.category} = ${perCategory}%`);
+                    });
+                  }
+                }
               } else {
                 console.log('[Flowdeck] Could not fetch outline weights:', weightsResult.error || 'unknown');
                 // Continue without weights - non-fatal
@@ -616,11 +698,11 @@ document.addEventListener('DOMContentLoaded', function () {
       const calcResult = computeCourseCurrentGrade(currentCourse);
       updateResultsFromCalc(calcResult);
       
-      // Also update required grade if target is set
+      // Also refresh the per-item breakdown if target is set
       if (currentCourse.target_grade && Number.isFinite(currentCourse.target_grade)) {
-        const requiredResult = computeRequiredGradeOnRemaining(currentCourse, currentCourse.target_grade);
         if (requiredGradeValue) {
-          requiredGradeValue.textContent = requiredResult.message;
+          requiredGradeValue.innerHTML = '';
+          requiredGradeValue.appendChild(renderPerItemBreakdown(currentCourse, currentCourse.target_grade));
         }
       }
 
@@ -651,13 +733,8 @@ document.addEventListener('DOMContentLoaded', function () {
            // requiredGradeValue.textContent = result.message;
           }
 
-          const trackerElement = createGradeTrackerUI(currentCourse, v, (e)=>{console.log(e)});
-
-// 1. Clear out any old content inside your container first
           requiredGradeValue.innerHTML = '';
-
-// 2. Append the LIVE DOM element directly (preserves all event listeners and logic!)
-          requiredGradeValue.appendChild(trackerElement);
+          requiredGradeValue.appendChild(renderPerItemBreakdown(currentCourse, v));
         }
       }
     });
@@ -673,6 +750,15 @@ document.addEventListener('DOMContentLoaded', function () {
   fetchCourseFromActiveTab();
   fetchGradesFromLearningHub().catch(() => {});
 });
+
+const feedbackBtn = document.getElementById('feedbackBtn');
+if (feedbackBtn) {
+  feedbackBtn.addEventListener('click', () => {
+    chrome.tabs.create({ 
+      url: 'https://form.jotform.com/250936223826055' 
+    });
+  });
+}
 
 
 
