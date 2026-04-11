@@ -53,26 +53,37 @@ async function fetchOutlineWeights(outlineUrl) {
         }
         
         // Extract weights from table rows
-        const weights = [];
-        const rows = evalTable.querySelectorAll('tbody tr');
+        // section to be changed, table needs to be passed to the POST /parse-outline route for the server to return the weights.
+        // const weights = [];
+        // const rows = evalTable.querySelectorAll('tbody tr');
         
-        rows.forEach(row => {
-            const cells = row.querySelectorAll('td');
-            if (cells.length >= 2) {
-                const name = cells[0].textContent.trim();
-                const weightText = cells[1].textContent.trim();
-                const weightMatch = weightText.match(/[\d.]+/);
+        // rows.forEach(row => {
+        //     const cells = row.querySelectorAll('td');
+        //     if (cells.length >= 2) {
+        //         const name = cells[0].textContent.trim();
+        //         const weightText = cells[1].textContent.trim();
+        //         const weightMatch = weightText.match(/[\d.]+/);
                 
-                if (weightMatch) {
-                    const weight = parseFloat(weightMatch[0]);
-                    weights.push({ name, weight });
-                    console.log(`[Flowdeck BG] Found: ${name} = ${weight}%`);
-                }
+        //         if (weightMatch) {
+        //             const weight = parseFloat(weightMatch[0]);
+        //             weights.push({ name, weight });
+        //             console.log(`[Flowdeck BG] Found: ${name} = ${weight}%`);
+        //         }
+        //     }
+        // });
+
+        const AIresponse = await fetch('http://localhost:3000/parse-outline', {
+            method: 'POST',
+            body: JSON.stringify({ text: evalTable.outerHTML }), // send the table HTML to the server for parsing
+            headers: {
+                'Content-Type': 'application/json'
             }
         });
+
+        const result = await AIresponse.json();
         
-        console.log(`[Flowdeck BG] Successfully extracted ${weights.length} weights`);
-        return { ok: true, weights };
+        console.log(`[Flowdeck BG] Successfully extracted ${result.weights.length} weights`);
+        return { ok: true, weights: result.weights };
         
     } catch (error) {
         console.error('[Flowdeck BG] Fetch error:', error);

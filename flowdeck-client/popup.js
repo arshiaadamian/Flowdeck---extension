@@ -11,7 +11,6 @@ import { loadCourse, saveCourse } from './storage.js';
 document.addEventListener('DOMContentLoaded', function () {
 
   document.getElementById("feedbackBtn").addEventListener("click", function () {
-    document.getElementById("feedbackForm").style.display = "block";
     console.log("Clicked")
     this.style.display = "none"; // hides button after click
   });
@@ -84,28 +83,19 @@ document.addEventListener('DOMContentLoaded', function () {
         return { ok: false, error: 'No evaluation table found' };
       }
 
-      const weights = [];
-      const rows = evalTable.querySelectorAll('tbody tr');
-
-      rows.forEach((row) => {
-        const cells = row.querySelectorAll('td');
-        if (cells.length >= 2) {
-          const name = (cells[0].textContent || '').trim();
-          const weightText = (cells[1].textContent || '').trim();
-          const weightMatch = weightText.match(/[\d.]+/);
-
-          if (name && weightMatch) {
-            const weight = parseFloat(weightMatch[0]);
-            if (!Number.isNaN(weight)) {
-              weights.push({ name, weight });
-              console.log(`[Flowdeck] [Outline] Found: ${name} = ${weight}%`);
+      const AIresponse = await fetch('http://localhost:3000/parse-outline', {
+            method: 'POST',
+            body: JSON.stringify({ text: evalTable.outerHTML }), // send the table HTML to the server for parsing
+            headers: {
+                'Content-Type': 'application/json'
             }
-          }
-        }
-      });
+        });
+      const result = await AIresponse.json();
 
-      console.log(`[Flowdeck] [Outline] Successfully extracted ${weights.length} weights`);
-      return { ok: true, weights };
+      console.log(`[Flowdeck BG] weights are ${JSON.stringify(result)}`);
+      
+      return { ok: true, weights: result.weights };
+
     } catch (err) {
       console.error('[Flowdeck] [Outline] Fetch/parse error:', err);
       return { ok: false, error: err?.message || String(err) };

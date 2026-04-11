@@ -9,8 +9,9 @@ const app = express();
 app.use(cors()); // Use the CORS middleware for all origins
 app.use(express.json()); // Middleware to parse JSON bodies, makes sure when a request arrives with a JSON body, it automatically gets parsed into a JavaScript Object so you can access it via req.body in your route handlers.
 const port  = 3000;
+// gemini-2.5-flash
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY); // Initialize the Google Generative AI client with the API key from environment variables
-const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });// Get the specific generative model to use for generating responses
+const model = genAI.getGenerativeModel({ model: "gemini-robotics-er-1.5-preview" });// Get the specific generative model to use for generating responses
 
 // define a basic route
 app.get('/', (req, res) => {
