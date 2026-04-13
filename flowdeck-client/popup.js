@@ -570,6 +570,19 @@ document.addEventListener('DOMContentLoaded', function () {
           if (autoFetchWarning) autoFetchWarning.style.display = 'flex';
 
           const course = await buildCourseFromResponse(response.course);
+
+          console.log('[Flowdeck] Built course from response and saved data:', course);
+
+          const allItemsArray = [];
+
+          course.categories.forEach(category => {
+              allItemsArray.push({
+                category: category.category,
+                items: category.items.map(item => item.name)
+              })
+          });
+
+          console.log(`[Flowdeck] All categories and items for debugging outline matching: ${JSON.stringify(allItemsArray)}`);
           
           // --- Try to fetch and apply outline weights (best-effort, non-fatal) ---
           try {
@@ -598,41 +611,69 @@ document.addEventListener('DOMContentLoaded', function () {
               if (weightsResult.ok && Array.isArray(weightsResult.weights)) {
                 console.log('[Flowdeck] Successfully fetched outline weights:', weightsResult.weights);
 
-                // Step 3: Apply weights to categories (fuzzy matching)
-                const matchedCategories = new Set();
+                const structuredData = await buildCourseStructureFromAI(weightsResult.weights, allItemsArray);
+                console.log('[Flowdeck] Received structured category-item mapping from AI:', structuredData);
 
-                weightsResult.weights.forEach(({ name, weight }) => {
-                  // Try to match outline category name to scraped category name
-                  const matchedCategory = course.categories.find(c => {
-                    if (matchedCategories.has(c)) return false; // don't double-match
-                    const catName = (c.category || '').toLowerCase();
-                    const outlineName = name.toLowerCase();
-                    // Bidirectional includes for fuzzy matching
-                    return catName.includes(outlineName) || outlineName.includes(catName);
+                // loop through structuredData and for each item create a enew category with the "outlineCategory" as the name and "weight" as the weight.
+                const newStructuredCategories = [];
+                structuredData.forEach(categoryData => {
+                  const newCategory = new Category({
+                    course_id: course.id,
+                    category: categoryData.outlineCategory,
+                    weight: categoryData.weight,
+                    grade: 0,
+                    items: []
                   });
-
-                  if (matchedCategory) {
-                    matchedCategory.weight = weight;
-                    matchedCategories.add(matchedCategory);
-                    console.log(`[Flowdeck] Applied weight from outline: ${name} → ${matchedCategory.category} = ${weight}%`);
-                  } else {
-                    console.log(`[Flowdeck] No match found for outline category: ${name}`);
-                  }
+                  categoryData.learningHubCategories.forEach(hubCategoryName  => {
+                    const matchedCategory = course.categories.find(cat => cat.category === hubCategoryName);
+                    if (matchedCategory) {
+                      matchedCategory.items.forEach(item => {
+                        newCategory.items.push(item);
+                      });
+                    }
+                  });
+                  newStructuredCategories.push(newCategory);
                 });
 
-                // Step 4: Distribute remaining weight to unmatched categories
-                const unmatchedCategories = course.categories.filter(c => !matchedCategories.has(c));
-                if (unmatchedCategories.length > 0) {
-                  const totalMatched = Array.from(matchedCategories).reduce((sum, c) => sum + (c.weight || 0), 0);
-                  const remaining = parseFloat((100 - totalMatched).toFixed(1));
-                  if (remaining > 0) {
-                    const perCategory = parseFloat((remaining / unmatchedCategories.length).toFixed(1));
-                    unmatchedCategories.forEach(c => {
-                      c.weight = perCategory;
-                      console.log(`[Flowdeck] Assigned remaining weight to unmatched: ${c.category} = ${perCategory}%`);
-                    });
-                  }
-                }
+                course.categories = newStructuredCategories;
+
+                console.log('[Flowdeck] Updated course categories with AI-structured categories:', course.categories);
+
+                // Step 3: Apply weights to categories (fuzzy matching)
+                // const matchedCategories = new Set();
+
+                // weightsResult.weights.forEach(({ name, weight }) => {
+                //   // Try to match outline category name to scraped category name
+                //   const matchedCategory = course.categories.find(c => {
+                //     if (matchedCategories.has(c)) return false; // don't double-match
+                //     const catName = (c.category || '').toLowerCase();
+                //     const outlineName = name.toLowerCase();
+                //     // Bidirectional includes for fuzzy matching
+                //     return catName.includes(outlineName) || outlineName.includes(catName);
+                //   });
+
+                //   if (matchedCategory) {
+                //     matchedCategory.weight = weight;
+                //     matchedCategories.add(matchedCategory);
+                //     console.log(`[Flowdeck] Applied weight from outline: ${name} → ${matchedCategory.category} = ${weight}%`);
+                //   } else {
+                //     console.log(`[Flowdeck] No match found for outline category: ${name}`);
+                //   }
+                // });
+
+                // // Step 4: Distribute remaining weight to unmatched categories
+                // const unmatchedCategories = course.categories.filter(c => !matchedCategories.has(c));
+                // if (unmatchedCategories.length > 0) {
+                //   const totalMatched = Array.from(matchedCategories).reduce((sum, c) => sum + (c.weight || 0), 0);
+                //   const remaining = parseFloat((100 - totalMatched).toFixed(1));
+                //   if (remaining > 0) {
+                //     const perCategory = parseFloat((remaining / unmatchedCategories.length).toFixed(1));
+                //     unmatchedCategories.forEach(c => {
+                //       c.weight = perCategory;
+                //       console.log(`[Flowdeck] Assigned remaining weight to unmatched: ${c.category} = ${perCategory}%`);
+                //     });
+                //   }
+                // }
               } else {
                 console.log('[Flowdeck] Could not fetch outline weights:', weightsResult.error || 'unknown');
                 // Continue without weights - non-fatal
@@ -659,6 +700,32 @@ document.addEventListener('DOMContentLoaded', function () {
       showFetchStatus('Error: ' + (err?.message || 'Unknown'), 'error');
     }
   }
+
+  // function to call the second AI to get structured weights from the learning hub matching with the course outline.
+  async function buildCourseStructureFromAI(outlineCategories, learningHubItems) {
+    try 
+    {
+      const AIResponse = await fetch('http://localhost:3000/map-categories', {
+          method: 'POST',
+          body: JSON.stringify({ outlineCategories: outlineCategories, learningHubItems: learningHubItems }), // send the data to the server for mapping as JSON objects
+          headers: {
+            'Content-Type': 'application/json'
+          }
+    });
+
+      const result = await AIResponse.json();
+      console.log("Received mapped categories from AI:", result.mappedCategories);
+
+      return result.mappedCategories;
+    }
+    catch (err) {
+      console.error('Error fetching mapped categories from AI:', err);
+      return null;
+    }
+
+  }
+
+
 
   // --- Event Handlers ---
 

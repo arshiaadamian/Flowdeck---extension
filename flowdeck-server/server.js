@@ -56,6 +56,57 @@ app.post('/parse-outline', async (req, res) => {
 });
 
 
+// parse learning hub and course outline to make sure values in the outline are correctly matched to the course items.
+app.post('/map-categories', async (req, res) => {
+    const {outlineCategories, learningHubItems} = req.body;
+    if (!outlineCategories || !learningHubItems) {
+        return res.status(400).json({ error: 'Missing outlineCategories or learningHubItems in request body' });
+    }
+
+    try {
+        const prompt = `You are a course structure mapper. You will receive two pieces of data:
+                        1. A list of outline categories with their weights from the official course outline
+                        2. A list of Learning Hub categories, each with their items
+
+                        Your job is to match each outline category to the correct Learning Hub category or categories.
+
+                        Rules:
+                        - You MUST return Learning Hub category names EXACTLY as provided in the input — do not rephrase, abbreviate, or modify them in any way
+                        - One outline category can map to multiple Learning Hub categories if they logically belong together
+                        - If no Learning Hub category matches an outline category, return an empty array for learningHubCategories — do NOT guess or assign random categories
+                        - Every Learning Hub category must be assigned to exactly one outline category — do not leave any unassigned
+                        - Return ONLY a raw JSON array, no markdown, no explanation, no code blocks
+
+                        Expected output format:
+                        [
+                        { "outlineCategory": "string", "weight": number, "learningHubCategories": ["exact name as given"] },
+                        { "outlineCategory": "string", "weight": number, "learningHubCategories": [] }
+                        ]
+
+                        Outline categories:
+                        ${JSON.stringify(outlineCategories)}
+
+                        Learning Hub categories:
+                        ${JSON.stringify(learningHubItems)}`;
+
+        console.log("sending prompt to the second AI for mapping.");
+
+        const result = await model.generateContent(prompt);
+        const responseText = result.response;
+        const AItext = responseText.text(); // method to return the string from the response object.
+        const mappedCategories = JSON.parse(AItext);
+
+        console.log("result is: " + AItext);
+
+        res.json({ mappedCategories: mappedCategories });
+    }
+    catch (err) {
+        console.error("error mapping categories: ", err);
+        res.status(500).json({ error: 'failed to map categories' });
+    }
+});
+
+
 // start the server and listen on the specified port
 app.listen(port, () => {
     console.log("server is running at http://localhost:" + port);
