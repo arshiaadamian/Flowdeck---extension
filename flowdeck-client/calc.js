@@ -30,6 +30,11 @@ function toInstance(obj, Ctor) {
 export function computeCategoryGradePercent(category) {
   const cat = toInstance(category, Category);
 
+  if (cat.manualGrade !== null) {
+    cat.grade = cat.manualGrade;
+    return { grade: cat.grade, doneCount: 0, totalItems: cat.items.length, usedWeighted: false };
+  }
+
   const doneItems = cat.items
     .map((it) => toInstance(it, Item))
     .filter((it) => it.done === true);

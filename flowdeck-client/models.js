@@ -144,13 +144,15 @@ function generateId() {
       weight = 0,
       grade = 0,
       items = [],
+      manualGrade = null
     } = {}) {
       this.id = toStringOr(id, generateId());
       this.course_id = toStringOr(course_id, "");
       this.category = toStringOr(category, "");
       this.weight = toNumberOr(weight, 0);
       this.grade = toNumberOr(grade, 0);
-  
+      this.manualGrade = manualGrade === null ? null : toNumberOr(manualGrade, null);  
+      
       // Ensure deep instance array
       this.items = Array.isArray(items)
         ? items.map((it) => (it instanceof Item ? it : Item.fromJson(it)))
@@ -186,6 +188,7 @@ function generateId() {
         weight: this.weight,
         grade: this.grade,
         items: this.items.map((it) => it.toJson()),
+        manualGrade: this.manualGrade,
       };
     }
   
@@ -208,6 +211,7 @@ function generateId() {
         category: json.category,
         weight: json.weight,
         grade: json.grade,
+        manualGrade: json.manualGrade ?? null,
         items: rawItems.map((it) => Item.fromJson(it)),
       });
     }

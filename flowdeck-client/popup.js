@@ -189,11 +189,13 @@ document.addEventListener('DOMContentLoaded', function () {
       const nameSpan = document.createElement('span');
       nameSpan.className = 'category-block-name';
       nameSpan.textContent = cat.category || 'Unnamed';
+      nameSpan.title = cat.category || 'Unnamed';
 
       const weightWrap = document.createElement('div');
       weightWrap.className = 'category-block-weight-wrap';
       const weightLabel = document.createElement('label');
-      weightLabel.textContent = 'Weight (%)';
+      weightLabel.textContent = 'Wt%';
+      weightLabel.title = 'Category weight (%)';
       const weightInput = document.createElement('input');
       weightInput.type = 'number';
       weightInput.className = 'weight-input';
@@ -203,12 +205,29 @@ document.addEventListener('DOMContentLoaded', function () {
       weightInput.value = Number.isFinite(cat.weight) ? cat.weight : '';
       weightInput.placeholder = '0';
       weightInput.dataset.categoryId = cat.id;
-      
-      // Category grade display placeholder
-      const gradeDisplay = document.createElement('span');
-      gradeDisplay.className = 'category-grade-display';
       const catGrade = computeCategoryGrade(cat);
-      gradeDisplay.textContent = catGrade !== null ? `Grade: ${catGrade.toFixed(1)}%` : 'Grade: --%';
+      // Category grade display placeholder
+      const gradeDisplay = document.createElement('input');
+      gradeDisplay.type = 'number';
+      gradeDisplay.min = '0';
+      gradeDisplay.step = '1';
+      gradeDisplay.title = 'Override category grade manually';
+      gradeDisplay.className = 'category-grade-display';
+      if (cat.manualGrade !== null && cat.manualGrade !== undefined) {
+        gradeDisplay.value = cat.manualGrade;
+        gradeDisplay.placeholder = 'Grade %';
+      } else {
+        gradeDisplay.value = '';
+        gradeDisplay.placeholder = catGrade !== null ? catGrade.toFixed(1) : '--';
+      }
+
+      gradeDisplay.addEventListener('input', (e) => {
+        e.stopPropagation();
+        const val = e.target.value;
+        cat.manualGrade = val === '' ? null : parseFloat(val);
+      });
+      
+      // gradeDisplay.textContent = catGrade !== null ? `Grade: ${catGrade.toFixed(1)}%` : 'Grade: --%';
       
       weightWrap.appendChild(weightLabel);
       weightWrap.appendChild(weightInput);
@@ -267,6 +286,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
       header.addEventListener('click', (e) => {
         if (e.target.closest('.weight-input')) return;
+        if (e.target.closest('.category-grade-display')) return;
         const expanded = header.getAttribute('aria-expanded') === 'true';
         header.setAttribute('aria-expanded', !expanded);
         body.classList.toggle('collapsed', expanded);
@@ -349,7 +369,10 @@ document.addEventListener('DOMContentLoaded', function () {
       const gradeDisplay = block.querySelector('.category-grade-display');
       if (gradeDisplay) {
         const catGrade = computeCategoryGrade(cat);
-        gradeDisplay.textContent = catGrade !== null ? `Grade: ${catGrade.toFixed(1)}%` : 'Grade: --%';
+        if (cat.manualGrade === null || cat.manualGrade === undefined) {
+          gradeDisplay.value = '';
+          gradeDisplay.placeholder = catGrade !== null ? catGrade.toFixed(1) : '--';
+        }
       }
     });
   }
