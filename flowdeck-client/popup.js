@@ -33,6 +33,14 @@ document.addEventListener('DOMContentLoaded', function () {
   const maxPossibleValue = document.getElementById('maxPossibleValue');
   const requiredGradeValue = document.getElementById('requiredGradeValue');
   const targetGradeInput = document.getElementById('targetGrade');
+  const outlineFallback = document.getElementById('outlineFallback');
+  const outlineURLInput = document.getElementById('outlineURL');
+  const outlineSubmitBtn = document.getElementById('outlineSubmitBtn');
+  const outlineError = document.getElementById('outlineError');
+  const goodUrl = document.getElementById('goodUrl');
+  const manualUrl = document.getElementById('manualUrl');
+  const aiLoadingBanner = document.getElementById('aiLoadingBanner');
+  const aiLoadingText = document.getElementById('aiLoadingText');
 
   let currentCourseKey = null;
   /** @type {Course|null} */
@@ -108,7 +116,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!saveStatus) return;
     saveStatus.textContent = message;
     saveStatus.className = `save-status ${type}`;
-    saveStatus.style.display = 'block';
+    saveStatus.style.display = 'flex';
     setTimeout(() => {
       if (saveStatus) saveStatus.style.display = 'none';
     }, 3000);
@@ -116,9 +124,19 @@ document.addEventListener('DOMContentLoaded', function () {
 
   function showFetchStatus(message, className) {
     if (!fetchStatus) return;
-    fetchStatus.style.display = 'block';
+    fetchStatus.style.display = 'flex';
     fetchStatus.textContent = message;
     fetchStatus.className = `fetch-status ${className || ''}`;
+  }
+
+  function showAILoading(msg) {
+    if (!aiLoadingBanner) return;
+    if (aiLoadingText) aiLoadingText.textContent = msg;
+    aiLoadingBanner.style.display = 'flex';
+  }
+
+  function hideAILoading() {
+    if (aiLoadingBanner) aiLoadingBanner.style.display = 'none';
   }
 
   // --- Compute category grade average from items ---
@@ -225,6 +243,11 @@ document.addEventListener('DOMContentLoaded', function () {
         e.stopPropagation();
         const val = e.target.value;
         cat.manualGrade = val === '' ? null : parseFloat(val);
+
+        if (val === '' && cat.items.length === 0)
+        {
+          cat.grade = null;
+        }
       });
       
       // gradeDisplay.textContent = catGrade !== null ? `Grade: ${catGrade.toFixed(1)}%` : 'Grade: --%';
@@ -547,7 +570,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
   async function fetchGradesFromLearningHub() {
     console.log('[Flowdeck] Sending FLOWDECK_SCRAPE...');
-    showFetchStatus('Fetching grades...', 'fetching');
 
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -589,8 +611,6 @@ document.addEventListener('DOMContentLoaded', function () {
           }
 
           console.log('[Flowdeck] Scrape success');
-          showFetchStatus(`Found ${(response.course?.categories?.length || 0)} categories`, 'success');
-          if (autoFetchWarning) autoFetchWarning.style.display = 'flex';
 
           const course = await buildCourseFromResponse(response.course);
 
@@ -629,77 +649,56 @@ document.addEventListener('DOMContentLoaded', function () {
               console.log('[Flowdeck] Got outline URL:', urlResult.outlineUrl);
 
               // Step 2: Fetch outline directly from popup (uses host_permissions)
-              const weightsResult = await fetchOutlineWeightsInPopup(urlResult.outlineUrl);
+              if((await applyOutlineWeights(urlResult.outlineUrl, allItemsArray, course)).ok === false) 
+              {
+                const term = urlResult.term;
+                console.log("URL result is: " + JSON.stringify(urlResult));
+                manualUrl.textContent = "Course outline could not be accessed on this page (can only be accessed if grades are posted on the main LH page (lecture page), please either enter the course CRN or the full associate outline URL for the course (https://...) to get data from the course outline.";
+                manualUrl.style.display = 'block';
+                outlineFallback.style.display = 'block';
 
-              if (weightsResult.ok && Array.isArray(weightsResult.weights)) {
-                console.log('[Flowdeck] Successfully fetched outline weights:', weightsResult.weights);
-
-                const structuredData = await buildCourseStructureFromAI(weightsResult.weights, allItemsArray);
-                console.log('[Flowdeck] Received structured category-item mapping from AI:', structuredData);
-
-                // loop through structuredData and for each item create a enew category with the "outlineCategory" as the name and "weight" as the weight.
-                const newStructuredCategories = [];
-                structuredData.forEach(categoryData => {
-                  const newCategory = new Category({
-                    course_id: course.id,
-                    category: categoryData.outlineCategory,
-                    weight: categoryData.weight,
-                    grade: 0,
-                    items: []
-                  });
-                  categoryData.learningHubCategories.forEach(hubCategoryName  => {
-                    const matchedCategory = course.categories.find(cat => cat.category === hubCategoryName);
-                    if (matchedCategory) {
-                      matchedCategory.items.forEach(item => {
-                        newCategory.items.push(item);
-                      });
+                outlineSubmitBtn.addEventListener('click', async () => {
+                  outlineError.style.display = 'none';
+                  outlineError.textContent = '';
+                  const url = outlineURLInput.value.trim();
+                  if (!url) {
+                    outlineError.textContent = 'Please enter a URL.';
+                    outlineError.style.display = 'block';
+                    return;
+                  }
+                  else if (/^\d+$/.test(url)) {
+                    // Allow entering just the course ID as a shortcut
+                    const full_url = 'https://www.bcit.ca/outlines/' + term + url;
+                    console.log("Full url is: " + full_url); 
+                    if((await applyOutlineWeights(full_url, allItemsArray, course)).ok === false) {
+                      outlineError.textContent = 'Failed to fetch weights from the provided CRN. Either enter the CRN(for lecture) or full URL(https://...).';
+                      outlineError.style.display = 'block';
                     }
-                  });
-                  newStructuredCategories.push(newCategory);
+                    else{
+                      outlineFallback.style.display = 'none';
+                      goodUrl.textContent = 'Good CRN, fetching data from the outline URL';
+                      goodUrl.style.display = 'block';
+                      renderCategoriesAndItems(course);
+                      const calcResult = computeCourseCurrentGrade(course);
+                      updateResultsFromCalc(calcResult);
+                      updateTargetFromCourse(course);
+                    }
+                  } else {
+                    if((await applyOutlineWeights(url, allItemsArray, course)).ok === false) {
+                      outlineError.textContent = 'Failed to fetch weights from the provided URL. Either enter the CRN(for lecture) or full URL (https://...).';
+                      outlineError.style.display = 'block';
+                    }
+                    else{
+                      outlineFallback.style.display = 'none';
+                      goodUrl.textContent = 'Good URL, fetching data from the outline URL';
+                      goodUrl.style.display = 'block';
+                      renderCategoriesAndItems(course);
+                      const calcResult = computeCourseCurrentGrade(course);
+                      updateResultsFromCalc(calcResult);
+                      updateTargetFromCourse(course);
+                    }
+                  } 
                 });
-
-                course.categories = newStructuredCategories;
-
-                console.log('[Flowdeck] Updated course categories with AI-structured categories:', course.categories);
-
-                // Step 3: Apply weights to categories (fuzzy matching)
-                // const matchedCategories = new Set();
-
-                // weightsResult.weights.forEach(({ name, weight }) => {
-                //   // Try to match outline category name to scraped category name
-                //   const matchedCategory = course.categories.find(c => {
-                //     if (matchedCategories.has(c)) return false; // don't double-match
-                //     const catName = (c.category || '').toLowerCase();
-                //     const outlineName = name.toLowerCase();
-                //     // Bidirectional includes for fuzzy matching
-                //     return catName.includes(outlineName) || outlineName.includes(catName);
-                //   });
-
-                //   if (matchedCategory) {
-                //     matchedCategory.weight = weight;
-                //     matchedCategories.add(matchedCategory);
-                //     console.log(`[Flowdeck] Applied weight from outline: ${name} → ${matchedCategory.category} = ${weight}%`);
-                //   } else {
-                //     console.log(`[Flowdeck] No match found for outline category: ${name}`);
-                //   }
-                // });
-
-                // // Step 4: Distribute remaining weight to unmatched categories
-                // const unmatchedCategories = course.categories.filter(c => !matchedCategories.has(c));
-                // if (unmatchedCategories.length > 0) {
-                //   const totalMatched = Array.from(matchedCategories).reduce((sum, c) => sum + (c.weight || 0), 0);
-                //   const remaining = parseFloat((100 - totalMatched).toFixed(1));
-                //   if (remaining > 0) {
-                //     const perCategory = parseFloat((remaining / unmatchedCategories.length).toFixed(1));
-                //     unmatchedCategories.forEach(c => {
-                //       c.weight = perCategory;
-                //       console.log(`[Flowdeck] Assigned remaining weight to unmatched: ${c.category} = ${perCategory}%`);
-                //     });
-                //   }
-                // }
-              } else {
-                console.log('[Flowdeck] Could not fetch outline weights:', weightsResult.error || 'unknown');
-                // Continue without weights - non-fatal
               }
             }
           } catch (outlineErr) {
@@ -723,6 +722,53 @@ document.addEventListener('DOMContentLoaded', function () {
       showFetchStatus('Error: ' + (err?.message || 'Unknown'), 'error');
     }
   }
+
+  async function applyOutlineWeights(outlineUrl, allItemsArray, course) {
+    showAILoading('AI is reading your course outline…');
+    const weightsResult = await fetchOutlineWeightsInPopup(outlineUrl);
+
+    if (weightsResult.ok && Array.isArray(weightsResult.weights)) {
+      console.log('[Flowdeck] Successfully fetched outline weights:', weightsResult.weights);
+
+      showAILoading('AI is mapping your categories…');
+      const structuredData = await buildCourseStructureFromAI(weightsResult.weights, allItemsArray);
+      console.log('[Flowdeck] Received structured category-item mapping from AI:', structuredData);
+
+      // loop through structuredData and for each item create a enew category with the "outlineCategory" as the name and "weight" as the weight.
+      const newStructuredCategories = [];
+      structuredData.forEach(categoryData => {
+        const newCategory = new Category({
+          course_id: course.id,
+          category: categoryData.outlineCategory,
+          weight: categoryData.weight,
+          grade: 0,
+          items: []
+        });
+        categoryData.learningHubCategories.forEach(hubCategoryName  => {
+          const matchedCategory = course.categories.find(cat => cat.category === hubCategoryName);
+          if (matchedCategory) {
+            matchedCategory.items.forEach(item => {
+              newCategory.items.push(item);
+            });
+          }
+        });
+        newStructuredCategories.push(newCategory);
+      });
+
+      course.categories = newStructuredCategories;
+
+      hideAILoading();
+      showFetchStatus('Categories loaded from course outline', 'success');
+      console.log('[Flowdeck] Updated course categories with AI-structured categories:', course.categories);
+      return {ok: true};
+    }
+    else
+    {
+      hideAILoading();
+      return {ok: false, error: weightsResult.error};
+    }
+  }
+
 
   // function to call the second AI to get structured weights from the learning hub matching with the course outline.
   async function buildCourseStructureFromAI(outlineCategories, learningHubItems) {

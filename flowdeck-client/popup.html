@@ -19,6 +19,30 @@
     <div class="course-info">
       <p class="detected-course">Detected Course: <span id="detectedCourse">COMP XXXX</span></p>
     </div>
+
+    <!-- Scrape / fetch status -->
+    <div id="fetchStatus" class="fetch-status" style="display:none;"></div>
+
+    <!-- AI processing banner (shown while AI endpoints are running) -->
+    <div id="aiLoadingBanner" class="ai-loading-banner" style="display:none;">
+      <span class="ai-spinner"></span>
+      <span id="aiLoadingText">AI is analyzing your course outline…</span>
+    </div>
+
+    <!-- Outline fallback input (shown when outline URL cannot be auto-detected) -->
+    <div class="outline-input" style="display: none;" id="outlineFallback">
+      <div class="manual-url-notice" id="manualUrl" style="display: none;"></div>
+      <div class="outline-input-row">
+        <input
+          type="text"
+          id="outlineURL"
+          class="outline-url-input"
+          placeholder="CRN (e.g. 12345) or full URL (https://…)">
+        <button id="outlineSubmitBtn" class="btn btn-secondary btn-sm">Submit</button>
+      </div>
+      <div class="outline-feedback outline-error" id="outlineError" style="display: none;"></div>
+      <div class="outline-feedback good-url" id="goodUrl" style="display: none;"></div>
+    </div>
   </section>
 
   <!-- Grade Weights Section (Categories & Items) -->
@@ -56,23 +80,16 @@
         <label for="targetGrade" class="result-label">Target Grade:</label>
         <input type="text" id="targetGrade" class="target-input" placeholder="Enter target %">
       </div>
-      <div  style="width: 100%;display: block">Required Grade on Remaining Work:</div><br><br>
-      <div style="width: 100%;display: block">
+      <div class="required-label">Required Grade on Remaining Work:</div>
+      <div class="required-value-row">
         <span id="requiredGradeValue" class="result-value">--%</span>
       </div>
     </div>
   </section>
 
-
-    <div class="feedback-button-container">
-      <button
-              id="feedbackBtn"
-              class="feedback-button"
-      >
-
-        Give Us Feedback
-      </button>
-    </div>
+  <div class="feedback-button-container">
+    <button id="feedbackBtn" class="feedback-button">Give Us Feedback</button>
+  </div>
 
   <script type="module" src="popup.js"></script>
 </body>

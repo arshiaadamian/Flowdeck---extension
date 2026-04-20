@@ -275,21 +275,25 @@ export function computeMaxPossibleGradeIfPerfect(course)
       continue;
     }
 
-    // Category with no items — D2L already gave us its grade directly (e.g. Chapter Quizzes).
-    // Count it as fully done at its reported grade.
     if (catInst.items.length === 0) {
-      const catGrade = Number.isFinite(catInst.grade) ? catInst.grade : 0;
-      maxPossibleContribution += (catGrade / 100) * catWeight;
+      if (catInst.manualGrade !== null && catInst.manualGrade !== undefined) {
+        maxPossibleContribution += catWeight;
+        console.log(`[Flowdeck] Category ${catInst.category} has no items, using manual grade ${catInst.manualGrade}% for contribution.`);
+        console.log(`[Flowdeck] maxPossibleContribution is: ${maxPossibleContribution}`);
+      }
       continue;
     }
-
+    
     // get only done items.
     const doneItems = catInst.items.map((it) => toInstance(it, Item))
                                    .filter((it) => it.done === true);
 
+    
     if (doneItems.length === 0)
     {
-      continue;
+      const catGrade = Number.isFinite(catInst.grade) ? catInst.grade : 0;
+      maxPossibleContribution += (catGrade / 100) * catWeight;
+      continue; // no done items, so this category contributes nothing yet
     }
 
     // check if all done items have valid weights

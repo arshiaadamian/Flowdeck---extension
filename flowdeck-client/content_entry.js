@@ -67,7 +67,7 @@ function getOutlineUrlFromPage() {
     const outlineUrl = `https://www.bcit.ca/outlines/${term}${sectionId}/`;
     
     console.log('[Flowdeck] Built outline URL:', outlineUrl);
-    return { ok: true, outlineUrl };
+    return { ok: true, outlineUrl, term };
   } catch (err) {
     console.error('[Flowdeck] Error building outline URL:', err);
     return { ok: false, error: err.message };

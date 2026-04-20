@@ -12,7 +12,7 @@ const port  = 3000;
 // gemini-2.5-flash
 // gemini-robotics-er-1.5-preview
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY); // Initialize the Google Generative AI client with the API key from environment variables
-const model = genAI.getGenerativeModel({ model: "gemini-robotics-er-1.5-preview" });// Get the specific generative model to use for generating responses
+const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });// Get the specific generative model to use for generating responses
 
 // define a basic route
 app.get('/', (req, res) => {
