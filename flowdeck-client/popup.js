@@ -41,6 +41,10 @@ document.addEventListener('DOMContentLoaded', function () {
   const manualUrl = document.getElementById('manualUrl');
   const aiLoadingBanner = document.getElementById('aiLoadingBanner');
   const aiLoadingText = document.getElementById('aiLoadingText');
+  const aiRetryBanner = document.getElementById('aiRetryBanner');
+  const aiRetryBtn = document.getElementById('aiRetryBtn');
+  const aiRetryMsg = document.getElementById('aiRetryMsg');
+  const outlineWarning = document.getElementById('outlineWarning');
 
   let currentCourseKey = null;
   /** @type {Course|null} */
@@ -52,61 +56,63 @@ document.addEventListener('DOMContentLoaded', function () {
    * @returns {Promise<{ok: boolean, weights?: Array<{name: string, weight: number}>, error?: string}>}
    */
   async function fetchOutlineWeightsInPopup(outlineUrl) {
+    // Step 1: Fetch the outline page
+    let response;
     try {
       console.log('[Flowdeck] [Outline] Fetching outline directly from popup:', outlineUrl);
-      const response = await fetch(outlineUrl);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
+      response = await fetch(outlineUrl);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    } catch (fetchErr) {
+      console.error('[Flowdeck] [Outline] URL fetch failed:', fetchErr);
+      return { ok: false, error: fetchErr?.message || String(fetchErr), reason: 'url_fetch_failed' };
+    }
 
+    // Step 2: Parse HTML and find evaluation table
+    let evalTable = null;
+    try {
       const htmlText = await response.text();
       const parser = new DOMParser();
       const doc = parser.parseFromString(htmlText, 'text/html');
 
-      // Find evaluation table by looking for "Evaluation Criteria" heading
       const headings = doc.querySelectorAll('h3');
-      let evalTable = null;
-
       for (const heading of headings) {
         if ((heading.textContent || '').toLowerCase().includes('evaluation criteria')) {
           let sibling = heading.nextElementSibling;
           while (sibling) {
-            if (sibling.tagName === 'TABLE') {
-              evalTable = sibling;
-              break;
-            }
+            if (sibling.tagName === 'TABLE') { evalTable = sibling; break; }
             const nestedTable = sibling.querySelector && sibling.querySelector('table');
-            if (nestedTable) {
-              evalTable = nestedTable;
-              break;
-            }
+            if (nestedTable) { evalTable = nestedTable; break; }
             sibling = sibling.nextElementSibling;
           }
           break;
         }
       }
+    } catch (parseErr) {
+      console.error('[Flowdeck] [Outline] HTML parse error:', parseErr);
+      return { ok: false, error: parseErr?.message || String(parseErr), reason: 'url_fetch_failed' };
+    }
 
-      if (!evalTable) {
-        console.warn('[Flowdeck] [Outline] No evaluation table found');
-        return { ok: false, error: 'No evaluation table found' };
-      }
+    if (!evalTable) {
+      console.warn('[Flowdeck] [Outline] No evaluation table found');
+      return { ok: false, error: 'No evaluation table found', reason: 'url_fetch_failed' };
+    }
 
+    // Step 3: Call AI to parse the table
+    try {
       const AIresponse = await fetch('http://localhost:3000/parse-outline', {
-            method: 'POST',
-            body: JSON.stringify({ text: evalTable.outerHTML }), // send the table HTML to the server for parsing
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
+        method: 'POST',
+        body: JSON.stringify({ text: evalTable.outerHTML }),
+        headers: { 'Content-Type': 'application/json' }
+      });
       const result = await AIresponse.json();
-
       console.log(`[Flowdeck BG] weights are ${JSON.stringify(result)}`);
-      
+      if (!AIresponse.ok || !result.weights) {
+        return { ok: false, error: 'AI returned no weights', reason: 'ai_failed' };
+      }
       return { ok: true, weights: result.weights };
-
-    } catch (err) {
-      console.error('[Flowdeck] [Outline] Fetch/parse error:', err);
-      return { ok: false, error: err?.message || String(err) };
+    } catch (aiErr) {
+      console.error('[Flowdeck] [Outline] AI call failed:', aiErr);
+      return { ok: false, error: aiErr?.message || String(aiErr), reason: 'ai_failed' };
     }
   }
 
@@ -649,56 +655,90 @@ document.addEventListener('DOMContentLoaded', function () {
               console.log('[Flowdeck] Got outline URL:', urlResult.outlineUrl);
 
               // Step 2: Fetch outline directly from popup (uses host_permissions)
-              if((await applyOutlineWeights(urlResult.outlineUrl, allItemsArray, course)).ok === false) 
-              {
+              const applyResult = await applyOutlineWeights(urlResult.outlineUrl, allItemsArray, course);
+              if (!applyResult.ok) {
                 const term = urlResult.term;
-                console.log("URL result is: " + JSON.stringify(urlResult));
-                manualUrl.textContent = "Course outline could not be accessed on this page (can only be accessed if grades are posted on the main LH page (lecture page), please either enter the course CRN or the full associate outline URL for the course (https://...) to get data from the course outline.";
-                manualUrl.style.display = 'block';
-                outlineFallback.style.display = 'block';
+                console.log('[Flowdeck] applyOutlineWeights failed, reason:', applyResult.reason);
+                if (outlineWarning) outlineWarning.style.display = 'block';
 
-                outlineSubmitBtn.addEventListener('click', async () => {
-                  outlineError.style.display = 'none';
-                  outlineError.textContent = '';
-                  const url = outlineURLInput.value.trim();
-                  if (!url) {
-                    outlineError.textContent = 'Please enter a URL.';
-                    outlineError.style.display = 'block';
-                    return;
+                if (applyResult.reason === 'ai_failed') {
+                  // URL was valid but AI failed — show retry button, not URL input
+                  if (aiRetryBanner) {
+                    if (aiRetryMsg) aiRetryMsg.textContent = 'AI processing failed. Please try again.';
+                    aiRetryBanner.style.display = 'flex';
+                    aiRetryBtn.onclick = async () => {
+                      aiRetryBtn.disabled = true;
+                      if (aiRetryMsg) aiRetryMsg.textContent = 'Retrying…';
+                      const retryResult = await applyOutlineWeights(urlResult.outlineUrl, allItemsArray, course);
+                      if (retryResult.ok) {
+                        aiRetryBanner.style.display = 'none';
+                        if (outlineWarning) outlineWarning.style.display = 'none';
+                        renderCategoriesAndItems(course);
+                        const calcResult = computeCourseCurrentGrade(course);
+                        updateResultsFromCalc(calcResult);
+                        updateTargetFromCourse(course);
+                      } else {
+                        if (aiRetryMsg) aiRetryMsg.textContent = 'AI processing failed again. Please close and reopen the extension.';
+                        aiRetryBtn.style.display = 'none';
+                      }
+                    };
                   }
-                  else if (/^\d+$/.test(url)) {
-                    // Allow entering just the course ID as a shortcut
-                    const full_url = 'https://www.bcit.ca/outlines/' + term + url;
-                    console.log("Full url is: " + full_url); 
-                    if((await applyOutlineWeights(full_url, allItemsArray, course)).ok === false) {
-                      outlineError.textContent = 'Failed to fetch weights from the provided CRN. Either enter the CRN(for lecture) or full URL(https://...).';
+                } else {
+                  // URL could not be fetched — show manual URL input
+                  console.log("URL result is: " + JSON.stringify(urlResult));
+                  manualUrl.textContent = "Course outline could not be accessed on this page (can only be accessed if grades are posted on the main LH page (lecture page), please either enter the course CRN or the full associate outline URL for the course (https://...) to get data from the course outline.";
+                  manualUrl.style.display = 'block';
+                  outlineFallback.style.display = 'block';
+
+                  outlineSubmitBtn.addEventListener('click', async () => {
+                    outlineError.style.display = 'none';
+                    outlineError.textContent = '';
+                    const url = outlineURLInput.value.trim();
+                    if (!url) {
+                      outlineError.textContent = 'Please enter a URL.';
                       outlineError.style.display = 'block';
+                      return;
+                    } else if (/^\d+$/.test(url)) {
+                      const full_url = 'https://www.bcit.ca/outlines/' + term + url;
+                      console.log("Full url is: " + full_url);
+                      const r = await applyOutlineWeights(full_url, allItemsArray, course);
+                      if (!r.ok) {
+                        outlineError.textContent = r.reason === 'ai_failed'
+                          ? 'Outline found but AI failed. Please try again later.'
+                          : 'Failed to fetch weights from the provided CRN. Either enter the CRN(for lecture) or full URL(https://...).';
+                        outlineError.style.display = 'block';
+                      } else {
+                        outlineFallback.style.display = 'none';
+                        if (outlineWarning) outlineWarning.style.display = 'none';
+                        goodUrl.textContent = 'Good CRN, fetching data from the outline URL';
+                        goodUrl.style.display = 'block';
+                        renderCategoriesAndItems(course);
+                        const calcResult = computeCourseCurrentGrade(course);
+                        updateResultsFromCalc(calcResult);
+                        updateTargetFromCourse(course);
+                      }
+                    } else {
+                      const r = await applyOutlineWeights(url, allItemsArray, course);
+                      if (!r.ok) {
+                        outlineError.textContent = r.reason === 'ai_failed'
+                          ? 'Outline found but AI failed. Please try again later.'
+                          : 'Failed to fetch weights from the provided URL. Either enter the CRN(for lecture) or full URL (https://...).';
+                        outlineError.style.display = 'block';
+                      } else {
+                        outlineFallback.style.display = 'none';
+                        if (outlineWarning) outlineWarning.style.display = 'none';
+                        goodUrl.textContent = 'Good URL, fetching data from the outline URL';
+                        goodUrl.style.display = 'block';
+                        renderCategoriesAndItems(course);
+                        const calcResult = computeCourseCurrentGrade(course);
+                        updateResultsFromCalc(calcResult);
+                        updateTargetFromCourse(course);
+                      }
                     }
-                    else{
-                      outlineFallback.style.display = 'none';
-                      goodUrl.textContent = 'Good CRN, fetching data from the outline URL';
-                      goodUrl.style.display = 'block';
-                      renderCategoriesAndItems(course);
-                      const calcResult = computeCourseCurrentGrade(course);
-                      updateResultsFromCalc(calcResult);
-                      updateTargetFromCourse(course);
-                    }
-                  } else {
-                    if((await applyOutlineWeights(url, allItemsArray, course)).ok === false) {
-                      outlineError.textContent = 'Failed to fetch weights from the provided URL. Either enter the CRN(for lecture) or full URL (https://...).';
-                      outlineError.style.display = 'block';
-                    }
-                    else{
-                      outlineFallback.style.display = 'none';
-                      goodUrl.textContent = 'Good URL, fetching data from the outline URL';
-                      goodUrl.style.display = 'block';
-                      renderCategoriesAndItems(course);
-                      const calcResult = computeCourseCurrentGrade(course);
-                      updateResultsFromCalc(calcResult);
-                      updateTargetFromCourse(course);
-                    }
-                  } 
-                });
+                  });
+                }
+              } else {
+                if (outlineWarning) outlineWarning.style.display = 'none';
               }
             }
           } catch (outlineErr) {
@@ -727,46 +767,53 @@ document.addEventListener('DOMContentLoaded', function () {
     showAILoading('AI is reading your course outline…');
     const weightsResult = await fetchOutlineWeightsInPopup(outlineUrl);
 
-    if (weightsResult.ok && Array.isArray(weightsResult.weights)) {
-      console.log('[Flowdeck] Successfully fetched outline weights:', weightsResult.weights);
+    if (!weightsResult.ok) {
+      hideAILoading();
+      return { ok: false, error: weightsResult.error, reason: weightsResult.reason };
+    }
 
-      showAILoading('AI is mapping your categories…');
-      const structuredData = await buildCourseStructureFromAI(weightsResult.weights, allItemsArray);
-      console.log('[Flowdeck] Received structured category-item mapping from AI:', structuredData);
+    console.log('[Flowdeck] Successfully fetched outline weights:', weightsResult.weights);
 
-      // loop through structuredData and for each item create a enew category with the "outlineCategory" as the name and "weight" as the weight.
-      const newStructuredCategories = [];
-      structuredData.forEach(categoryData => {
-        const newCategory = new Category({
-          course_id: course.id,
-          category: categoryData.outlineCategory,
-          weight: categoryData.weight,
-          grade: 0,
-          items: []
-        });
-        categoryData.learningHubCategories.forEach(hubCategoryName  => {
-          const matchedCategory = course.categories.find(cat => cat.category === hubCategoryName);
-          if (matchedCategory) {
-            matchedCategory.items.forEach(item => {
-              newCategory.items.push(item);
-            });
-          }
-        });
-        newStructuredCategories.push(newCategory);
+    showAILoading('AI is mapping your categories…');
+    let structuredData;
+    try {
+      structuredData = await buildCourseStructureFromAI(weightsResult.weights, allItemsArray);
+    } catch (err) {
+      hideAILoading();
+      return { ok: false, error: err?.message || String(err), reason: 'ai_failed' };
+    }
+
+    if (!structuredData) {
+      hideAILoading();
+      return { ok: false, error: 'AI mapping returned no data', reason: 'ai_failed' };
+    }
+
+    console.log('[Flowdeck] Received structured category-item mapping from AI:', structuredData);
+
+    const newStructuredCategories = [];
+    structuredData.forEach(categoryData => {
+      const newCategory = new Category({
+        course_id: course.id,
+        category: categoryData.outlineCategory,
+        weight: categoryData.weight,
+        grade: 0,
+        items: []
       });
+      categoryData.learningHubCategories.forEach(hubCategoryName => {
+        const matchedCategory = course.categories.find(cat => cat.category === hubCategoryName);
+        if (matchedCategory) {
+          matchedCategory.items.forEach(item => { newCategory.items.push(item); });
+        }
+      });
+      newStructuredCategories.push(newCategory);
+    });
 
-      course.categories = newStructuredCategories;
+    course.categories = newStructuredCategories;
 
-      hideAILoading();
-      showFetchStatus('Categories loaded from course outline', 'success');
-      console.log('[Flowdeck] Updated course categories with AI-structured categories:', course.categories);
-      return {ok: true};
-    }
-    else
-    {
-      hideAILoading();
-      return {ok: false, error: weightsResult.error};
-    }
+    hideAILoading();
+    showFetchStatus('Categories loaded from course outline', 'success');
+    console.log('[Flowdeck] Updated course categories with AI-structured categories:', course.categories);
+    return { ok: true };
   }
 
 

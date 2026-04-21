@@ -43,6 +43,12 @@
       <div class="outline-feedback outline-error" id="outlineError" style="display: none;"></div>
       <div class="outline-feedback good-url" id="goodUrl" style="display: none;"></div>
     </div>
+
+    <!-- AI retry banner (shown when URL was valid but AI failed) -->
+    <div id="aiRetryBanner" style="display: none;" class="ai-retry-banner">
+      <span id="aiRetryMsg">AI processing failed. Please try again.</span>
+      <button id="aiRetryBtn" class="btn btn-secondary btn-sm">Retry</button>
+    </div>
   </section>
 
   <!-- Grade Weights Section (Categories & Items) -->
@@ -53,6 +59,9 @@
     </button>
     <div class="weights-content" id="weightsContent">
       <p class="weights-hint">Edit category weights &amp; grades below, or expand a category for per-item control. Clear a grade to let Flowdeck compute it. Press <strong>Save</strong> when done.</p>
+      <div id="outlineWarning" style="display: none;" class="outline-warning">
+        Grades below are <strong>not</strong> from your course outline. Try refreshing grades so AI can pull the correct weights.
+      </div>
       <div id="categoriesContainer" class="categories-container">
         <!-- Categories and expandable items rendered by popup.js from course data -->
       </div>

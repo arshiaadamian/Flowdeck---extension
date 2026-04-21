@@ -163,6 +163,37 @@ body {
   flex-shrink: 0;
 }
 
+/* ─── Outline Warning ────────────────────────────────────────────────────── */
+
+.outline-warning {
+  padding: 8px 12px;
+  background: #fff8ec;
+  border: 1px solid #f5d48b;
+  border-left: 3px solid #e0900a;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #7a4800;
+  margin-bottom: 10px;
+}
+
+/* ─── AI Retry Banner ────────────────────────────────────────────────────── */
+
+.ai-retry-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 14px;
+  background: #fff8ec;
+  border: 1px solid #f5d48b;
+  border-left: 3px solid #e0900a;
+  border-radius: 7px;
+  font-size: 13px;
+  color: #7a4800;
+  font-weight: 500;
+  animation: slide-in 0.2s ease-out;
+}
+
 /* ─── AI Loading Banner ───────────────────────────────────────────────────── */
 
 .ai-loading-banner {

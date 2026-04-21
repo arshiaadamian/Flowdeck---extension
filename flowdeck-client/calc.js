@@ -116,6 +116,14 @@ export function computeCourseCurrentGrade(course) {
 
     if (catWeight <= 0) continue;
 
+    // manualGrade always contributes full category weight, regardless of item done status
+    if (catInst.manualGrade !== null && catInst.manualGrade !== undefined) {
+      totalWeightEntered += catWeight;
+      totalContrib += (catInst.manualGrade / 100) * catWeight;
+      categoriesUsed++;
+      continue;
+    }
+
     const allItems = catInst.items.map((it) => toInstance(it, Item));
     const doneItems = allItems.filter((it) => it.done === true);
 
@@ -275,12 +283,13 @@ export function computeMaxPossibleGradeIfPerfect(course)
       continue;
     }
 
+    // manualGrade always counts as full category weight regardless of items or done status
+    if (catInst.manualGrade !== null && catInst.manualGrade !== undefined) {
+      maxPossibleContribution += catWeight;
+      continue;
+    }
+
     if (catInst.items.length === 0) {
-      if (catInst.manualGrade !== null && catInst.manualGrade !== undefined) {
-        maxPossibleContribution += catWeight;
-        console.log(`[Flowdeck] Category ${catInst.category} has no items, using manual grade ${catInst.manualGrade}% for contribution.`);
-        console.log(`[Flowdeck] maxPossibleContribution is: ${maxPossibleContribution}`);
-      }
       continue;
     }
     
