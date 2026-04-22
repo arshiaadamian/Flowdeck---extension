@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', function () {
    * @param {string} outlineUrl
    * @returns {Promise<{ok: boolean, weights?: Array<{name: string, weight: number}>, error?: string}>}
    */
-  async function fetchOutlineWeightsInPopup(outlineUrl) {
+  async function fetchOutlineWeightsInPopup(outlineUrl, cacheKey) {
     // Step 1: Fetch the outline page
     let response;
     try {
@@ -97,11 +97,13 @@ document.addEventListener('DOMContentLoaded', function () {
       return { ok: false, error: 'No evaluation table found', reason: 'url_fetch_failed' };
     }
 
+    console.log("cacheKey in fetchOutline is: " + cacheKey);
+
     // Step 3: Call AI to parse the table
     try {
       const AIresponse = await fetch('http://localhost:3000/parse-outline', {
         method: 'POST',
-        body: JSON.stringify({ text: evalTable.outerHTML }),
+        body: JSON.stringify({ text: evalTable.outerHTML, cacheKey: cacheKey}),
         headers: { 'Content-Type': 'application/json' }
       });
       const result = await AIresponse.json();
@@ -652,10 +654,14 @@ document.addEventListener('DOMContentLoaded', function () {
               console.log('[Flowdeck] Could not get outline URL:', urlResult.error || 'unknown');
               // Continue without weights - non-fatal
             } else {
+              console.log("URL for the course is: " + JSON.stringify(urlResult));
+              const cacheKey = urlResult.outlineUrl.match(/\/outlines\/(\d+)\//)[1];
+              console.log("cacheKey is: " + cacheKey);
+
               console.log('[Flowdeck] Got outline URL:', urlResult.outlineUrl);
 
               // Step 2: Fetch outline directly from popup (uses host_permissions)
-              const applyResult = await applyOutlineWeights(urlResult.outlineUrl, allItemsArray, course);
+              const applyResult = await applyOutlineWeights(urlResult.outlineUrl, allItemsArray, course, cacheKey);
               if (!applyResult.ok) {
                 const term = urlResult.term;
                 console.log('[Flowdeck] applyOutlineWeights failed, reason:', applyResult.reason);
@@ -763,9 +769,9 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  async function applyOutlineWeights(outlineUrl, allItemsArray, course) {
+  async function applyOutlineWeights(outlineUrl, allItemsArray, course, cacheKey) {
     showAILoading('AI is reading your course outline…');
-    const weightsResult = await fetchOutlineWeightsInPopup(outlineUrl);
+    const weightsResult = await fetchOutlineWeightsInPopup(outlineUrl, cacheKey);
 
     if (!weightsResult.ok) {
       hideAILoading();
@@ -777,7 +783,7 @@ document.addEventListener('DOMContentLoaded', function () {
     showAILoading('AI is mapping your categories…');
     let structuredData;
     try {
-      structuredData = await buildCourseStructureFromAI(weightsResult.weights, allItemsArray);
+      structuredData = await buildCourseStructureFromAI(weightsResult.weights, allItemsArray, cacheKey);
     } catch (err) {
       hideAILoading();
       return { ok: false, error: err?.message || String(err), reason: 'ai_failed' };
@@ -818,12 +824,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
 
   // function to call the second AI to get structured weights from the learning hub matching with the course outline.
-  async function buildCourseStructureFromAI(outlineCategories, learningHubItems) {
+  async function buildCourseStructureFromAI(outlineCategories, learningHubItems, cacheKey) {
     try 
     {
       const AIResponse = await fetch('http://localhost:3000/map-categories', {
           method: 'POST',
-          body: JSON.stringify({ outlineCategories: outlineCategories, learningHubItems: learningHubItems }), // send the data to the server for mapping as JSON objects
+          body: JSON.stringify({ outlineCategories: outlineCategories, learningHubItems: learningHubItems, cacheKey: cacheKey }), // send the data to the server for mapping as JSON objects
           headers: {
             'Content-Type': 'application/json'
           }
