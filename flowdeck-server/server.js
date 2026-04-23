@@ -1,7 +1,11 @@
 const express = require('express');   // Import the Express library
 const cors = require('cors');         // Import the CORS middleware
-const { GoogleGenerativeAI } = require('@google/generative-ai'); // Import the Google Generative AI library
 require('dotenv').config(); // Load environment variables from the .env file
+
+// const { GoogleGenerativeAI } = require('@google/generative-ai'); // Import the Google Generative AI library
+const Groq = require('groq-sdk');
+const groq = new Groq({apiKey: process.env.GROQ_API_KEY});
+
 
 
 // create an instance of the Express application
@@ -11,8 +15,8 @@ app.use(express.json()); // Middleware to parse JSON bodies, makes sure when a r
 const port  = 3000;
 // gemini-2.5-flash
 // gemini-robotics-er-1.5-preview
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY); // Initialize the Google Generative AI client with the API key from environment variables
-const model = genAI.getGenerativeModel({ model: "gemini-robotics-er-1.5-preview" });// Get the specific generative model to use for generating responses
+// const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY); // Initialize the Google Generative AI client with the API key from environment variables
+// const model = genAI.getGenerativeModel({ model: "gemini-robotics-er-1.5-preview" });// Get the specific generative model to use for generating responses
 
 // cache object, includes the termNumber + CRN as key values, and each key is an object consisting of two other objects called "parse-outline" and "map-categories"
 const cache = {};
@@ -47,10 +51,18 @@ app.post('/parse-outline', async (req, res) => {
                             ${text}`;
 
             console.log("Sending prompt to AI");
-            const result = await model.generateContent(prompt);
+
+            // const result = await model.generateContent(prompt);
+            const result = await groq.chat.completions.create({
+                model: "llama-3.3-70b-versatile",
+                messages: [{role: "user", content: prompt}]
+            })
+
             console.log("result is: " + JSON.stringify(result));
-            const responseText = result.response;
-            const AItext = responseText.text(); // method to return the string from the response object.
+
+            // const responseText = result.response;
+            // const AItext = responseText.text(); // method to return the string from the response object.
+            const AItext = result.choices[0].message.content;
             const weights = JSON.parse(AItext); // parse the response text JSON as JavaScript object
 
             cache[cacheKey] = {};
@@ -119,9 +131,14 @@ app.post('/map-categories', async (req, res) => {
 
         console.log("sending prompt to the second AI for mapping.");
 
-        const result = await model.generateContent(prompt);
-        const responseText = result.response;
-        const AItext = responseText.text(); // method to return the string from the response object.
+        // const result = await model.generateContent(prompt);
+        const result = await groq.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages: [{ role: "user", content: prompt }]
+        });
+        // const responseText = result.response;
+        // const AItext = responseText.text(); // method to return the string from the response object.
+        const AItext = result.choices[0].message.content;
         const mappedCategories = JSON.parse(AItext);
 
         cache[cacheKey]['map_categories'] = mappedCategories;
