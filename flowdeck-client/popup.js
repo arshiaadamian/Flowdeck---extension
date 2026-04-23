@@ -745,6 +745,34 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
               } else {
                 if (outlineWarning) outlineWarning.style.display = 'none';
+
+                // Re-apply saved user data on top of AI-rebuilt categories
+                const saved = await loadCourse(currentCourseKey);
+                if (saved && Array.isArray(saved.categories)) {
+                    const savedCatByName = new Map(
+                        saved.categories.map((c) => [(c.category || '').toLowerCase(), c])
+                    );
+                    course.categories.forEach((cat) => {
+                        const savedCat = savedCatByName.get((cat.category || '').toLowerCase());
+                        if (savedCat) {
+                            if (Number.isFinite(savedCat.weight)) cat.weight = savedCat.weight;
+                            if (savedCat.manualGrade !== null && savedCat.manualGrade !== undefined) {
+                                cat.manualGrade = savedCat.manualGrade;
+                            }
+                            const savedItemByName = new Map(
+                                (savedCat.items || []).map((i) => [(i.name || '').toLowerCase(), i])
+                            );
+                            cat.items.forEach((item) => {
+                                const si = savedItemByName.get((item.name || '').toLowerCase());
+                                if (si) {
+                                    if (Number.isFinite(si.weight)) item.weight = si.weight;
+                                    if (Number.isFinite(si.grade) && si.grade > 0) item.grade = si.grade;
+                                    if (typeof si.done === 'boolean') item.done = si.done;
+                                }
+                            });
+                        }
+                    });
+                }
               }
             }
           } catch (outlineErr) {
