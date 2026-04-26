@@ -30,7 +30,7 @@ app.get('/', (req, res) => {
 app.post('/parse-outline', async (req, res) => {
     const {text, cacheKey} = req.body;
     console.log("Received outline text for parsing: ", text);
-    if (!text || !cacheKey) {
+    if (!text) {
         return res.status(400).json({ error: 'Outline text not provided' }); // sends a json response to the clint using res.json()
     }
 
@@ -65,10 +65,15 @@ app.post('/parse-outline', async (req, res) => {
             const AItext = result.choices[0].message.content;
             const weights = JSON.parse(AItext); // parse the response text JSON as JavaScript object
 
-            cache[cacheKey] = {};
-            cache[cacheKey]['parse_outline'] = weights;
+            if (cacheKey) {
+                cache[cacheKey] = {};
+                cache[cacheKey]['parse_outline'] = weights;
+            }
             
-            console.log("cache for first AI(parse outline) is: " + JSON.stringify(cache[cacheKey]['parse_outline']));
+            
+            // console.log("cache for first AI(parse outline) is: " + JSON.stringify(cache[cacheKey]['parse_outline']));
+            console.log("result is not from cache.");
+
 
             res.json({ weights: weights }); // send the parsed weights back to the client as JSON, under the "weights" array
         }
@@ -97,11 +102,11 @@ app.post('/parse-outline', async (req, res) => {
 // parse learning hub and course outline to make sure values in the outline are correctly matched to the course items.
 app.post('/map-categories', async (req, res) => {
     const {outlineCategories, learningHubItems, cacheKey} = req.body;
-    if (!outlineCategories || !learningHubItems || !cacheKey) {
+    if (!outlineCategories || !learningHubItems) {
         return res.status(400).json({ error: 'Missing outlineCategories or learningHubItems in request body' });
     }
 
-    if (!cache[cacheKey]['map_categories'])
+    if (!cacheKey || !cache[cacheKey] || !cache[cacheKey]['map_categories'])
     {
         try {
         const prompt = `You are a course structure mapper. You will receive two pieces of data:
@@ -141,13 +146,14 @@ app.post('/map-categories', async (req, res) => {
         const AItext = result.choices[0].message.content;
         const mappedCategories = JSON.parse(AItext);
 
-        cache[cacheKey]['map_categories'] = mappedCategories;
-        console.log("cache for second AI(map cateogires) is: " + JSON.stringify(cache[cacheKey]['map_categories']));
-        console.log("cache is: " + JSON.stringify(cache));
-
-
+        if (cacheKey) {
+            cache[cacheKey]['map_categories'] = mappedCategories;
+            // console.log("cache for second AI(map cateogires) is: " + JSON.stringify(cache[cacheKey]['map_categories']));
+            // console.log("cache is: " + JSON.stringify(cache));
+        }
 
         console.log("result is: " + AItext);
+        console.log("result is not from cache.");
 
         res.json({ mappedCategories: mappedCategories });
         }

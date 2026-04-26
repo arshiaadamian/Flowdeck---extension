@@ -6,7 +6,7 @@
 
 import { Course, Category, Item } from './models.js';
 import { computeCourseCurrentGrade, computeMaxPossibleGradeIfPerfect, computePerItemRequiredBreakdown } from './calc.js';
-import { loadCourse, saveCourse } from './storage.js';
+import { loadCourse, saveCourse, loadOutlineCache, saveOutlineCache, clearOutlineCache } from './storage.js';
 
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -55,7 +55,7 @@ document.addEventListener('DOMContentLoaded', function () {
    * @param {string} outlineUrl
    * @returns {Promise<{ok: boolean, weights?: Array<{name: string, weight: number}>, error?: string}>}
    */
-  async function fetchOutlineWeightsInPopup(outlineUrl, cacheKey) {
+  async function fetchOutlineWeightsInPopup(outlineUrl, cacheKey, isManual) {
     // Step 1: Fetch the outline page
     let response;
     try {
@@ -103,7 +103,7 @@ document.addEventListener('DOMContentLoaded', function () {
     try {
       const AIresponse = await fetch('http://localhost:3000/parse-outline', {
         method: 'POST',
-        body: JSON.stringify({ text: evalTable.outerHTML, cacheKey: cacheKey}),
+        body: JSON.stringify({ text: evalTable.outerHTML, cacheKey: isManual ? null : cacheKey }),
         headers: { 'Content-Type': 'application/json' }
       });
       const result = await AIresponse.json();
@@ -675,7 +675,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     aiRetryBtn.onclick = async () => {
                       aiRetryBtn.disabled = true;
                       if (aiRetryMsg) aiRetryMsg.textContent = 'Retrying…';
-                      const retryResult = await applyOutlineWeights(urlResult.outlineUrl, allItemsArray, course);
+                      const retryResult = await applyOutlineWeights(urlResult.outlineUrl, allItemsArray, course, cacheKey);
                       if (retryResult.ok) {
                         aiRetryBanner.style.display = 'none';
                         if (outlineWarning) outlineWarning.style.display = 'none';
@@ -707,7 +707,7 @@ document.addEventListener('DOMContentLoaded', function () {
                     } else if (/^\d+$/.test(url)) {
                       const full_url = 'https://www.bcit.ca/outlines/' + term + url;
                       console.log("Full url is: " + full_url);
-                      const r = await applyOutlineWeights(full_url, allItemsArray, course);
+                      const r = await applyOutlineWeights(full_url, allItemsArray, course, cacheKey, true);
                       if (!r.ok) {
                         outlineError.textContent = r.reason === 'ai_failed'
                           ? 'Outline found but AI failed. Please try again later.'
@@ -724,7 +724,7 @@ document.addEventListener('DOMContentLoaded', function () {
                         updateTargetFromCourse(course);
                       }
                     } else {
-                      const r = await applyOutlineWeights(url, allItemsArray, course);
+                      const r = await applyOutlineWeights(url, allItemsArray, course, cacheKey, true);
                       if (!r.ok) {
                         outlineError.textContent = r.reason === 'ai_failed'
                           ? 'Outline found but AI failed. Please try again later.'
@@ -797,9 +797,40 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  async function applyOutlineWeights(outlineUrl, allItemsArray, course, cacheKey) {
+  function categoryRebuild(structuredData, course) {
+    const newStructuredCategories = [];
+      structuredData.forEach(categoryData => {
+        const newCategory = new Category({
+          course_id: course.id,
+          category: categoryData.outlineCategory,
+          weight: categoryData.weight,
+          grade: 0,
+          items: []
+        });
+        categoryData.learningHubCategories.forEach(hubCategoryName => {
+          const matchedCategory = course.categories.find(cat => cat.category === hubCategoryName);
+          if (matchedCategory) {
+            matchedCategory.items.forEach(item => { newCategory.items.push(item); });
+          }
+        });
+        newStructuredCategories.push(newCategory);
+      });
+
+      course.categories = newStructuredCategories;
+  }
+
+  async function applyOutlineWeights(outlineUrl, allItemsArray, course, cacheKey, isManual) {
+    // Check client-side cache first
+    const cachedStructuredData = await loadOutlineCache(cacheKey);
+    if (cachedStructuredData) {
+      console.log('[Flowdeck] Found cached outline structure for cacheKey:', cacheKey);
+      categoryRebuild(cachedStructuredData, course);
+      showFetchStatus('Categories loaded from course outline', 'success');
+      return { ok: true };
+    }
+
     showAILoading('AI is reading your course outline…');
-    const weightsResult = await fetchOutlineWeightsInPopup(outlineUrl, cacheKey);
+    const weightsResult = await fetchOutlineWeightsInPopup(outlineUrl, cacheKey, isManual);
 
     if (!weightsResult.ok) {
       hideAILoading();
@@ -811,7 +842,7 @@ document.addEventListener('DOMContentLoaded', function () {
     showAILoading('AI is mapping your categories…');
     let structuredData;
     try {
-      structuredData = await buildCourseStructureFromAI(weightsResult.weights, allItemsArray, cacheKey);
+      structuredData = await buildCourseStructureFromAI(weightsResult.weights, allItemsArray, cacheKey, isManual);
     } catch (err) {
       hideAILoading();
       return { ok: false, error: err?.message || String(err), reason: 'ai_failed' };
@@ -822,42 +853,27 @@ document.addEventListener('DOMContentLoaded', function () {
       return { ok: false, error: 'AI mapping returned no data', reason: 'ai_failed' };
     }
 
+    // save outline structure to cache for future use
+    await saveOutlineCache(cacheKey, structuredData);
+
     console.log('[Flowdeck] Received structured category-item mapping from AI:', structuredData);
 
-    const newStructuredCategories = [];
-    structuredData.forEach(categoryData => {
-      const newCategory = new Category({
-        course_id: course.id,
-        category: categoryData.outlineCategory,
-        weight: categoryData.weight,
-        grade: 0,
-        items: []
-      });
-      categoryData.learningHubCategories.forEach(hubCategoryName => {
-        const matchedCategory = course.categories.find(cat => cat.category === hubCategoryName);
-        if (matchedCategory) {
-          matchedCategory.items.forEach(item => { newCategory.items.push(item); });
-        }
-      });
-      newStructuredCategories.push(newCategory);
-    });
-
-    course.categories = newStructuredCategories;
+    categoryRebuild(structuredData, course);
 
     hideAILoading();
     showFetchStatus('Categories loaded from course outline', 'success');
     console.log('[Flowdeck] Updated course categories with AI-structured categories:', course.categories);
     return { ok: true };
+    
   }
 
-
   // function to call the second AI to get structured weights from the learning hub matching with the course outline.
-  async function buildCourseStructureFromAI(outlineCategories, learningHubItems, cacheKey) {
+  async function buildCourseStructureFromAI(outlineCategories, learningHubItems, cacheKey, isManual) {
     try 
     {
       const AIResponse = await fetch('http://localhost:3000/map-categories', {
           method: 'POST',
-          body: JSON.stringify({ outlineCategories: outlineCategories, learningHubItems: learningHubItems, cacheKey: cacheKey }), // send the data to the server for mapping as JSON objects
+          body: JSON.stringify({ outlineCategories: outlineCategories, learningHubItems: learningHubItems, cacheKey: isManual ? null : cacheKey }), // send the data to the server for mapping as JSON objects
           headers: {
             'Content-Type': 'application/json'
           }

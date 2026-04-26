@@ -6,6 +6,7 @@
 
 const STORAGE_KEY = 'flowdeckCourses';
 const LEGACY_WEIGHTS_KEY = 'weightsByCourse';
+const OUTLINE_CACHE_KEY = 'flowdeckOutlineCache';
 
 /**
  * Loads course data for a given course key.
@@ -80,3 +81,115 @@ export async function saveCourse(courseKey, courseJson) {
     });
   });
 }
+
+/**
+ * Loads the outline from the cache for a given course key.
+ * @param {string} cacheKey - e.g. a course key -> "20251048068"
+ * @returns {Promise<Object|null>} Cached outline object or null if not found
+ */
+export async function loadOutlineCache(cacheKey){
+    if (!cacheKey || typeof cacheKey !== 'string') {
+        console.log('[Flowdeck] loadOutlineCache: invalid cacheKey');
+        return null;
+    }
+
+    if (!chrome?.storage?.local) {
+        console.error('[Flowdeck] Storage API not available');
+        return null;
+    }
+
+    return new Promise((resolve) => {
+        chrome.storage.local.get([OUTLINE_CACHE_KEY], (result) => {
+            if (chrome.runtime.lastError) {
+                console.error('[Flowdeck] loadOutlineCache error:', chrome.runtime.lastError.message);
+                resolve(null);
+                return;
+            }
+            const data = result[OUTLINE_CACHE_KEY] || {};
+            const cached = data[cacheKey] ? data[cacheKey] : null;
+            console.log('[Flowdeck] loadOutlineCache:', cacheKey, cached ? 'found' : 'not found');
+            resolve(cached);
+        });
+    })
+}
+
+/**
+ * Saves the outline to the cache for a given cacheKey and structured outline object.
+ * @param {string} cacheKey - e.g. a course key -> "20251048068"
+ * @param {Object} structuredData - structured outline object to cache (e.g. from AI parsing)
+ * @returns {Promise<void>}
+ */
+export async function saveOutlineCache(cacheKey, structuredData){
+    if (!cacheKey || typeof cacheKey !== 'string') {
+        console.log('[Flowdeck] saveOutlineCache: invalid cacheKey');
+        return;
+    }
+
+    if (!chrome?.storage?.local) {
+        console.error('[Flowdeck] Storage API not available');
+        return;
+    }
+
+    return new Promise((resolve) => {
+        chrome.storage.local.get([OUTLINE_CACHE_KEY], (result) => {
+            if (chrome.runtime.lastError) {
+                console.error('[Flowdeck] saveOutlineCache get error:', chrome.runtime.lastError.message);
+                resolve();
+                return;
+            }
+
+            const data = result[OUTLINE_CACHE_KEY] || {};
+            data[cacheKey] = structuredData;
+            chrome.storage.local.set({ [OUTLINE_CACHE_KEY]: data }, () => {
+                if (chrome.runtime.lastError) {
+                    console.error('[Flowdeck] saveOutlineCache set error:', chrome.runtime.lastError.message);
+                } else {
+                    console.log('[Flowdeck] saveOutlineCache: saved', cacheKey);
+                }
+                resolve();
+            });
+        });
+    });
+}
+
+/** 
+ * Clears outline cache for a given cachKey
+ * @param {string} cacheKey - e.g. a course key -> "20251048068"
+ * @returns {Promise<void>}
+ */
+
+export async function clearOutlineCache(cacheKey){
+    if (!cacheKey || typeof cacheKey !== 'string')
+    {
+      console.log("[Flowdeck] clearOutlineCache: invalid cachekey");
+      return;
+    }
+
+    if (!chrome?.storage?.local){
+      console.error('[Flowdeck] Storage API not available');
+      return;
+    }
+
+    return new Promise ((resolve) => {
+      chrome.storage.local.get([OUTLINE_CACHE_KEY], (result) => {
+        if (chrome.runtime.lastError)
+        {
+          console.error('[Flowdeck] saveOutlineCache get error:', chrome.runtime.lastError.message);
+          resolve();
+          return;
+        }
+
+        const data = result[OUTLINE_CACHE_KEY] || {};
+        delete data[cacheKey];
+        chrome.storage.local.set({ [OUTLINE_CACHE_KEY]: data }, () => {
+          if (chrome.runtime.lastError) {
+            console.error('[Flowdeck] clearOutlineCache set error:', chrome.runtime.lastError.message);
+          } else {
+            console.log('[Flowdeck] clearOutlineCache: saved', cacheKey);
+          }
+          resolve();
+        })
+      })
+    })
+}
+
