@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Step 3: Call AI to parse the table
     try {
       // http://localhost:3000/parse-outline
-      const AIresponse = await fetch('site--flowdeck-extensionserver--7hgkydn2hz94.code.run/parse-outline', {
+      const AIresponse = await fetch('https://site--flowdeck-extensionserver--7hgkydn2hz94.code.run/parse-outline', {
         method: 'POST',
         body: JSON.stringify({ text: evalTable.outerHTML, cacheKey: isManual ? null : cacheKey }),
         headers: { 'Content-Type': 'application/json' }
@@ -873,7 +873,7 @@ document.addEventListener('DOMContentLoaded', function () {
     try 
     {
       // http://localhost:3000/map-categories
-      const AIResponse = await fetch('site--flowdeck-extensionserver--7hgkydn2hz94.code.run/map-categories', {
+      const AIResponse = await fetch('https://site--flowdeck-extensionserver--7hgkydn2hz94.code.run/map-categories', {
           method: 'POST',
           body: JSON.stringify({ outlineCategories: outlineCategories, learningHubItems: learningHubItems, cacheKey: isManual ? null : cacheKey }), // send the data to the server for mapping as JSON objects
           headers: {

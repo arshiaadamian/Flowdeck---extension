@@ -22,7 +22,8 @@
   "permissions": ["activeTab", "storage"],
   "host_permissions": [
     "https://learn.bcit.ca/*",
-    "https://www.bcit.ca/outlines/*"
+    "https://www.bcit.ca/outlines/*",
+    "https://site--flowdeck-extensionserver--7hgkydn2hz94.code.run/*"
   ],
   "content_scripts": [
     {
