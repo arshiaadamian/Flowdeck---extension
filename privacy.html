@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowdeck Privacy Policy</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 60px auto;
+            padding: 0 24px;
+            color: #333;
+            line-height: 1.7;
+        }
+        h1 { font-size: 2rem; margin-bottom: 4px; }
+        h2 { font-size: 1.2rem; margin-top: 32px; }
+        p, li { font-size: 1rem; }
+        ul { padding-left: 20px; }
+        .date { color: #888; font-size: 0.9rem; margin-bottom: 32px; }
+    </style>
+</head>
+<body>
+    <h1>Privacy Policy for Flowdeck</h1>
+    <p class="date">Last updated: September 2026</p>
+
+    <h2>Overview</h2>
+    <p>Flowdeck is a Chrome extension built for BCIT students to track and calculate grades from the BCIT Learning Hub. This privacy policy explains what data Flowdeck accesses and how it is handled.</p>
+
+    <h2>Data We Access</h2>
+    <p>Flowdeck accesses the following data solely to provide its grade tracking functionality:</p>
+    <ul>
+        <li><strong>Website content</strong> — Flowdeck reads grade data from your BCIT Learning Hub pages and course outline pages on bcit.ca. This data is used only to calculate and display your grades within the extension.</li>
+    </ul>
+
+    <h2>Data Storage</h2>
+    <ul>
+        <li>All grade data is stored <strong>locally on your device</strong> using Chrome's built-in <code>chrome.storage.local</code> API. This data never leaves your device except as described below.</li>
+        <li>Cached course outline structures are also stored locally on your device so that future loads are instant.</li>
+    </ul>
+
+    <h2>Data Sent to Our Server</h2>
+    <ul>
+        <li>When Flowdeck fetches a course outline for the first time, the evaluation table HTML from that outline page is sent to our backend server solely to extract grade weights using an AI model.</li>
+        <li>This data is <strong>not stored permanently</strong> on our server. It is processed and discarded after the response is returned.</li>
+        <li>The results are cached temporarily in server memory to avoid redundant AI calls for the same course.</li>
+    </ul>
+
+    <h2>Data We Do Not Collect</h2>
+    <ul>
+        <li>We do not collect, store, or share any personally identifiable information.</li>
+        <li>We do not collect your name, email, student ID, or any other personal details.</li>
+        <li>We do not sell or transfer any user data to third parties.</li>
+        <li>We do not use data for any purpose unrelated to grade tracking.</li>
+    </ul>
+
+    <h2>Third Party Services</h2>
+    <p>Flowdeck uses the Groq API to process course outline text. Only the evaluation criteria table from the course outline is sent — no personal information or grade data is ever sent to Groq.</p>
+
+    <h2>Contact</h2>
+    <p>If you have any questions about this privacy policy, please contact us at adamianarshia@gmail.com.</p>
+</body>
+</html>
