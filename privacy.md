@@ -1,6 +1,6 @@
 # Privacy Policy for Flowdeck
 
-**Last updated: April 2026**
+**Last updated: September 2026**
 
 ## Overview
 
