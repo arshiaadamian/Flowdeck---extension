@@ -54,7 +54,7 @@ app.post('/parse-outline', async (req, res) => {
 
             // const result = await model.generateContent(prompt);
             const result = await groq.chat.completions.create({
-                model: "groq/compound",
+                model: "openai/gpt-oss-120b",
                 messages: [{role: "user", content: prompt}]
             })
 
@@ -138,7 +138,7 @@ app.post('/map-categories', async (req, res) => {
 
         // const result = await model.generateContent(prompt);
         const result = await groq.chat.completions.create({
-            model: "groq/compound",
+            model: "openai/gpt-oss-120b",
             messages: [{ role: "user", content: prompt }]
         });
         // const responseText = result.response;
