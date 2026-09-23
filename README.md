@@ -67,48 +67,18 @@ Category grades use a **weighted average** when every completed item has a weigh
 
 ```mermaid
 flowchart LR
-    subgraph Browser["🌐 Chrome"]
-        direction TB
-        LH["📄 Learning Hub page<br/><sub>learn.bcit.ca</sub>"]
-        CE["content_entry.js<br/><sub>message bridge</sub>"]
-        SD["scrapedata.js<br/><sub>DOM → Course model</sub>"]
-        subgraph Popup["🧩 Extension popup"]
-            direction TB
-            PJ["popup.js<br/><sub>UI controller</sub>"]
-            CALC["calc.js<br/><sub>grade math</sub>"]
-            MOD["models.js<br/><sub>Course · Category · Item</sub>"]
-            ST[("storage.js<br/><sub>chrome.storage.local</sub>")]
-        end
-    end
-
-    OUT["📘 BCIT course outline<br/><sub>bcit.ca/outlines/{term}{CRN}</sub>"]
-
-    subgraph Server["🖥️ flowdeck-server (Express)"]
-        direction TB
-        PO["POST /parse-outline"]
-        MC["POST /map-categories"]
-        CACHE[("in-memory cache<br/><sub>keyed by term+CRN</sub>")]
-    end
-
-    GROQ["⚡ Groq API<br/><sub>gpt-oss-120b</sub>"]
-
-    PJ -- "FLOWDECK_SCRAPE /<br/>GET_OUTLINE_URL" --> CE
-    CE --> SD
-    SD -. reads DOM .-> LH
-    CE -- "course JSON +<br/>outline URL" --> PJ
-
-    PJ -- "fetch HTML" --> OUT
-    PJ -- "① evaluation table" --> PO
-    PJ -- "② outline + LH categories" --> MC
-    PO <--> CACHE
-    MC <--> CACHE
-    PO --> GROQ
-    MC --> GROQ
-
-    PJ <--> ST
-    PJ --> CALC
-    CALC --> MOD
+    LH["📄 Learning Hub"] -- grades --> EXT["🧩 Flowdeck extension"]
+    OUT["📘 BCIT course outline"] -- weights table --> EXT
+    EXT -- "outline + category names" --> SRV["🖥️ Flowdeck server"]
+    SRV <--> AI["⚡ Groq AI"]
+    SRV -- matched weights --> EXT
+    EXT <--> ST[("💾 Local storage")]
 ```
+
+1. The extension reads your grades from the **Learning Hub** page.
+2. It fetches the grade weights from the **BCIT course outline**.
+3. The **server** asks the **AI** to match the outline's categories to the Learning Hub ones.
+4. The extension calculates your grades and saves everything in **local storage**.
 
 ### Request flow
 
